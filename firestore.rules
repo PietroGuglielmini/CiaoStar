@@ -1,0 +1,227 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // 0. GLOBAL DEFAULT DENY CATCH-ALL
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // GLOBAL SECURITY HELPERS
+    // ==========================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // Admin bootstrap check (Static check on the bootstrap email and DB role lookup)
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'petyguglix02@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ==========================================
+    // 1. COLLECTION: USERS
+    // ==========================================
+    match /users/{userId} {
+      // Safety id checks
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn();
+
+      // Creation rules (prevent self-assigned ADMIN roles or automatic approvals)
+      allow create: if isSignedIn() && isOwner(userId) && (
+        incoming().role == 'FAN' ||
+        request.auth.token.email == 'petyguglix02@gmail.com'
+      ) && (
+        incoming().isApproved == false ||
+        request.auth.token.email == 'petyguglix02@gmail.com'
+      );
+
+      // User self-updates are strictly limited to profile info, while admins can do anything
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          isOwner(userId) &&
+          // Enforce role immutability
+          incoming().role == existing().role &&
+          // Enforce approval status immutability to prevent self-approval hacking via client console
+          (!('isApproved' in incoming()) || ('isApproved' in existing() && incoming().isApproved == existing().isApproved)) &&
+          // Enforce disabled status immutability
+          (!('isDisabled' in incoming()) || ('isDisabled' in existing() && incoming().isDisabled == existing().isDisabled)) &&
+          // Enforce commission rate immutability
+          (!('customCommissionPercent' in incoming()) || ('customCommissionPercent' in existing() && incoming().customCommissionPercent == existing().customCommissionPercent))
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 2. COLLECTION: ORDERS
+    // ==========================================
+    match /orders/{orderId} {
+      // Users can only retrieve their own orders, preventing enumeration
+      allow get: if isSignedIn() && isValidId(orderId) && (
+        resource.data.fanId == request.auth.uid ||
+        resource.data.talentId == request.auth.uid ||
+        isAdmin()
+      );
+      
+      allow list: if isSignedIn() && (
+        resource.data.fanId == request.auth.uid ||
+        resource.data.talentId == request.auth.uid ||
+        isAdmin()
+      );
+
+      // Payment flow bypass guard: orders can only be created with payment pending state
+      allow create: if isSignedIn() && incoming().fanId == request.auth.uid && (
+        incoming().status == 'PENDING' ||
+        incoming().status == 'PENDING_PAYMENT'
+      ) && (
+        // Protect financial fields from manipulation
+        incoming().pricePaid is number &&
+        incoming().applicationFee is number
+      );
+
+      // Tiered state transition guard: prevent client-side payment status tampering
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          // FAN updating their own order
+          request.auth.uid == existing().fanId && (
+            // Allowed to accept their own completed video or open a dispute
+            (incoming().status == 'COMPLETED' && incoming().acceptedByFan == true) ||
+            (incoming().status == 'DISPUTE_OPEN' && existing().status == 'COMPLETED') ||
+            (incoming().status == existing().status)
+          ) && 
+          incoming().pricePaid == existing().pricePaid &&
+          incoming().applicationFee == existing().applicationFee &&
+          incoming().fanId == existing().fanId &&
+          incoming().talentId == existing().talentId &&
+          incoming().createdAt == existing().createdAt
+        ) || (
+          // TALENT updating their assigned order
+          request.auth.uid == existing().talentId && (
+            // Talent can accept / reject / complete orders
+            (incoming().status in ['ACCEPTED', 'REJECTED'] && existing().status == 'PAID_AWAITING_VIDEO') ||
+            // Completing require uploading a video
+            (incoming().status == 'COMPLETED' && (incoming().videoUrl is string && incoming().videoUrl.size() > 10)) ||
+            (incoming().status == existing().status)
+          ) &&
+          incoming().pricePaid == existing().pricePaid &&
+          incoming().applicationFee == existing().applicationFee &&
+          incoming().fanId == existing().fanId &&
+          incoming().talentId == existing().talentId &&
+          incoming().createdAt == existing().createdAt
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 3. COLLECTION: REVIEWS
+    // ==========================================
+    match /reviews/{reviewId} {
+      allow read, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().fanId == request.auth.uid;
+      allow update, delete: if isAdmin() || (isSignedIn() && existing().fanId == request.auth.uid);
+    }
+
+    // ==========================================
+    // 4. COLLECTION: PUBLIC SAMPLES
+    // ==========================================
+    match /public_samples/{sampleId} {
+      allow read, list: if isSignedIn();
+      allow write: if isAdmin() || (isSignedIn() && incoming().talentId == request.auth.uid);
+    }
+
+    // ==========================================
+    // 5. COLLECTION: NOTIFICATIONS
+    // ==========================================
+    match /notifications/{notificationId} {
+      allow read, list: if isSignedIn() && (
+        resource.data.recipientId == request.auth.uid ||
+        resource.data.recipientId == 'ADMIN'
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        existing().recipientId == request.auth.uid || isAdmin()
+      ) && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 6. COLLECTION: SENT EMAILS (LOG)
+    // ==========================================
+    match /sent_emails/{emailId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 7. COLLECTION: VIDEOS METADATA
+    // ==========================================
+    match /videos/{videoId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (incoming().talentId == request.auth.uid || isAdmin());
+      allow update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 8. COLLECTION: AUDIT LOGS (ADMIN-ONLY)
+    // ==========================================
+    match /audit_logs/{auditId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ==========================================
+    // 9. COLLECTION: CHATS & CONVERSATIONS
+    // ==========================================
+    match /conversations/{conversationId} {
+      allow read, list, write: if isSignedIn() && (conversationId == request.auth.uid || isAdmin());
+
+      match /messages/{messageId} {
+        allow read, list: if isSignedIn() && (conversationId == request.auth.uid || isAdmin());
+        allow create: if isSignedIn() && (conversationId == request.auth.uid || isAdmin());
+        allow update, delete: if isAdmin() || (isSignedIn() && existing().senderId == request.auth.uid);
+      }
+    }
+
+    // ==========================================
+    // 10. SYSTEM SETTINGS & CONFIGS
+    // ==========================================
+    match /settings/{settingsId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Email, SMTP credentials, API secret keys - STRICTLY ADMIN-ONLY!
+    match /system_settings/{settingsId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

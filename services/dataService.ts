@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, SettableMetadata, deleteObject, uploadBytesResumable } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { Talent, User, UserRole, VideoRequest, RequestStatus, AdminSettings, AuditLog, ChatMessage, Conversation, VerificationStatus, DisputeCategory, InAppNotification, Review } from '../types';
+import { Talent, User, UserRole, VideoRequest, RequestStatus, AdminSettings, AuditLog, ChatMessage, Conversation, VerificationStatus, DisputeCategory, InAppNotification, Review, EmailSettings } from '../types';
 import { ADMIN_EMAIL, DEFAULT_ADMIN_SETTINGS, DB_CATEGORIES_SEED } from '../constants';
 import { addWatermarkToVideo } from './videoUtils';
 
@@ -23,6 +23,79 @@ export const getAdminSettings = async (): Promise<AdminSettings> => {
 export const updateAdminSettings = async (data: Partial<AdminSettings>) => {
     const settingsRef = doc(db, 'settings', 'global_config');
     await updateDoc(settingsRef, data);
+};
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+export const getEmailSettings = async (): Promise<EmailSettings | null> => {
+    try {
+        const settingsRef = doc(db, 'system_settings', 'payment_and_email');
+        const snap = await getDoc(settingsRef);
+        if (snap.exists()) {
+            return snap.data() as EmailSettings;
+        }
+        return null;
+    } catch (error) {
+        handleFirestoreError(error, OperationType.GET, 'system_settings/payment_and_email');
+        return null;
+    }
+};
+
+export const updateEmailSettings = async (data: EmailSettings) => {
+    try {
+        const settingsRef = doc(db, 'system_settings', 'payment_and_email');
+        await setDoc(settingsRef, {
+            ...data,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+    } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, 'system_settings/payment_and_email');
+    }
 };
 
 // --- USER & VERIFICATION ---

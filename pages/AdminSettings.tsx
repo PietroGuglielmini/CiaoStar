@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { AdminSettings as SettingsType } from '../types';
-import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark } from '../services/dataService';
-import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard } from 'lucide-react';
+import { AdminSettings as SettingsType, EmailSettings } from '../types';
+import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings } from '../services/dataService';
+import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard, Mail } from 'lucide-react';
 
 const WatermarkLivePreview: React.FC<{ settings: SettingsType | null }> = ({ settings }) => {
     const text = settings?.watermarkText || 'CiaoStar';
@@ -69,8 +69,20 @@ const WatermarkLivePreview: React.FC<{ settings: SettingsType | null }> = ({ set
 
 const AdminSettings: React.FC = () => {
     const [settings, setSettings] = useState<SettingsType | null>(null);
+    const [emailSettings, setEmailSettings] = useState<EmailSettings>({
+        senderEmail: '',
+        senderName: '',
+        apiKey: '',
+    });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [emailSaving, setEmailSaving] = useState(false);
+
+    // SMTP fields
+    const [smtpHost, setSmtpHost] = useState('');
+    const [smtpUser, setSmtpUser] = useState('');
+    const [smtpPass, setSmtpPass] = useState('');
+    const [smtpPort, setSmtpPort] = useState(587);
     
     // Watermark State
     const [watermarkFile, setWatermarkFile] = useState<File | null>(null);
@@ -81,10 +93,61 @@ const AdminSettings: React.FC = () => {
         const data = await getAdminSettings();
         setSettings(data);
         if (data.watermarkUrl) setWatermarkPreview(data.watermarkUrl);
+
+        try {
+            const mailData = await getEmailSettings();
+            if (mailData) {
+                setEmailSettings({
+                    senderEmail: mailData.senderEmail || '',
+                    senderName: mailData.senderName || '',
+                    apiKey: mailData.apiKey || '',
+                });
+                setSmtpHost((mailData as any).smtpHost || '');
+                setSmtpUser((mailData as any).smtpUser || '');
+                setSmtpPass((mailData as any).smtpPass || '');
+                setSmtpPort((mailData as any).smtpPort || 587);
+            }
+        } catch (e) {
+            console.error("Error loading email settings: ", e);
+        }
+
         setLoading(false);
     };
 
     useEffect(() => { load(); }, []);
+
+    const handleSaveEmail = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Simple regex format email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailSettings.senderEmail || !emailRegex.test(emailSettings.senderEmail)) {
+            alert("Per favore, inserisci un indirizzo email mittente valido.");
+            return;
+        }
+
+        if (!emailSettings.senderName.trim()) {
+            alert("Il nome del mittente è richiesto.");
+            return;
+        }
+
+        setEmailSaving(true);
+        try {
+            await updateEmailSettings({
+                ...emailSettings,
+                smtpHost,
+                smtpUser,
+                smtpPass,
+                smtpPort,
+            } as any);
+            alert("Configurazione Email salvata con successo su Firestore!");
+        } catch (err: any) {
+            console.error(err);
+            alert("Errore durante il salvataggio: " + (err.message || err));
+        } finally {
+            setEmailSaving(false);
+        }
+    };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -634,6 +697,107 @@ const AdminSettings: React.FC = () => {
                     <div className="pt-2">
                         <button disabled={saving} className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl transition-all">
                             {saving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Firebase Config'}
+                        </button>
+                    </div>
+                </form>
+
+                {/* EMAIL CONFIGURATION */}
+                <form onSubmit={handleSaveEmail} className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm space-y-6">
+                    <h2 className="text-lg font-black text-slate-900 uppercase mb-2 flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-purple-500" /> Impostazioni Email
+                    </h2>
+                    <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                        Configura le credenziali di mittente e API/SMTP per l'invio delle notifiche via email quando l'ordine viene pagato o completato.
+                    </p>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Email del Mittente (senderEmail)</label>
+                            <input 
+                                type="email" 
+                                placeholder="es. info@ciaostar.it"
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={emailSettings.senderEmail}
+                                onChange={e => setEmailSettings({...emailSettings, senderEmail: e.target.value})}
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Nome del Mittente (senderName)</label>
+                            <input 
+                                type="text" 
+                                placeholder="es. Team CiaoStar"
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={emailSettings.senderName}
+                                onChange={e => setEmailSettings({...emailSettings, senderName: e.target.value})}
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Brevo API Key (Opzionale / apiKey)</label>
+                            <input 
+                                type="password" 
+                                placeholder="• • • • • • • • • • • •"
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={emailSettings.apiKey}
+                                onChange={e => setEmailSettings({...emailSettings, apiKey: e.target.value})}
+                            />
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <h3 className="text-[10px] font-black text-slate-400 uppercase mb-3">Configurazione SMTP Fallback (Nodemailer)</h3>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">SMTP Host</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="smtp.brevo.com"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                                        value={smtpHost}
+                                        onChange={e => setSmtpHost(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">SMTP Port</label>
+                                    <input 
+                                        type="number" 
+                                        placeholder="587"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                                        value={smtpPort}
+                                        onChange={e => setSmtpPort(Number(e.target.value))}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">SMTP Username</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="user@example.com"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                                        value={smtpUser}
+                                        onChange={e => setSmtpUser(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">SMTP Password</label>
+                                    <input 
+                                        type="password" 
+                                        placeholder="• • • • • • • • • • • •"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                                        value={smtpPass}
+                                        onChange={e => setSmtpPass(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <button disabled={emailSaving} className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl hover:shadow-purple-200 transition-all">
+                            {emailSaving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Impostazioni Email'}
                         </button>
                     </div>
                 </form>

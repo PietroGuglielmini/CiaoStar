@@ -207,3 +207,11 @@ export interface InAppNotification {
   read: boolean;
 }
 
+export interface EmailSettings {
+  senderEmail: string;
+  senderName: string;
+  apiKey?: string;
+  updatedAt?: string;
+}
+
+
