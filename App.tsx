@@ -17,6 +17,7 @@ import AdminUsers from './pages/AdminUsers';
 import UserChat from './pages/UserChat';
 import AdminReviews from './pages/AdminReviews';
 import TalentSettings from './pages/TalentSettings';
+import BecomeStar from './pages/BecomeStar';
 import { User, UserRole, AdminSettings as SettingsType } from './types';
 import { auth } from './firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
@@ -205,6 +206,7 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+              <Route path="/become-star" element={<BecomeStar />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/talent/:id" element={<TalentProfile currentUser={user} />} />
               <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Talent } from '../types';
 import { Check, Star, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getReviewsForTalent } from '../services/dataService';
+import { getReviewsForTalent, incrementImpressions } from '../services/dataService';
 
 interface TalentCardProps {
   talent: Talent;
@@ -22,6 +22,13 @@ const TalentCard: React.FC<TalentCardProps> = ({ talent }) => {
         setAverageRating(null);
       }
     });
+
+    // Incrementa le impressioni in modo controllato via session storage
+    const sessionKey = `impr_talent_${talent.id}`;
+    if (!sessionStorage.getItem(sessionKey)) {
+      sessionStorage.setItem(sessionKey, 'true');
+      incrementImpressions(talent.id);
+    }
   }, [talent.id]);
 
   return (
@@ -49,12 +56,19 @@ const TalentCard: React.FC<TalentCardProps> = ({ talent }) => {
 
         <div className="absolute bottom-3 left-3 right-3 bg-black/40 backdrop-blur-md p-3 rounded-xl flex justify-between items-center text-white">
             <span className="text-sm font-bold">Da €{talent.price}</span>
-            {averageRating !== null && averageRating > 0 && (
-                <div className="flex items-center gap-1">
-                    <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
-                    <span className="text-xs font-bold">{averageRating}</span>
-                </div>
-            )}
+            <div className="flex items-center gap-2">
+                {averageRating !== null && averageRating > 0 && (
+                    <div className="flex items-center gap-1 bg-white/15 px-2 py-0.5 rounded-lg backdrop-blur-sm">
+                        <Star className="w-3.5 h-3.5 text-amber-400 fill-current" />
+                        <span className="text-xs font-bold">{averageRating}</span>
+                    </div>
+                )}
+                {talent.completedOrdersCount !== undefined && talent.completedOrdersCount > 0 && (
+                    <span className="text-[9px] bg-indigo-600 font-extrabold uppercase tracking-tight px-2 py-1 rounded-lg text-white inline-block shadow-md">
+                        {talent.completedOrdersCount} {talent.completedOrdersCount === 1 ? 'ordine' : 'ordini'}
+                    </span>
+                )}
+            </div>
         </div>
       </div>
       

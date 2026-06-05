@@ -15,6 +15,30 @@ const Home: React.FC = () => {
   const [maxPriceFilter, setMaxPriceFilter] = useState<number>(250);
   const [absoluteMaxPrice, setAbsoluteMaxPrice] = useState<number>(250);
   const [absoluteMinPrice, setAbsoluteMinPrice] = useState<number>(0);
+  const [sortBy, setSortBy] = useState<'featured' | 'recent' | 'popular'>('featured');
+  const [globalDraft, setGlobalDraft] = useState<any>(null);
+  const [globalDraftTime, setGlobalDraftTime] = useState('');
+
+  useEffect(() => {
+    const raw = localStorage.getItem('ciao_star_abandoned_cart');
+    if (raw) {
+      try {
+        const draft = JSON.parse(raw);
+        const draftDate = new Date(draft.timestamp);
+        const ageHours = (new Date().getTime() - draftDate.getTime()) / (1000 * 60 * 60);
+        
+        // Use a generic limit of 24h as a fallback on homepage
+        if (ageHours <= 24) {
+          setGlobalDraft(draft);
+          setGlobalDraftTime(draftDate.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }));
+        } else {
+          localStorage.removeItem('ciao_star_abandoned_cart');
+        }
+      } catch (e) {
+        console.error("Errore parse bozza globale:", e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     // Applica SEO globale all'avvio della homepage
@@ -41,13 +65,28 @@ const Home: React.FC = () => {
   }, []);
 
   const filteredTalents = useMemo(() => {
-    return talents.filter(t => {
+    const list = talents.filter(t => {
       const matchesCategory = selectedCategory === 'Tutti' || t.category === selectedCategory;
       const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesPrice = (t.price ?? 0) <= maxPriceFilter;
       return matchesCategory && matchesSearch && matchesPrice;
     });
-  }, [talents, selectedCategory, searchTerm, maxPriceFilter]);
+
+    if (sortBy === 'recent') {
+      return [...list].sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+    } else if (sortBy === 'popular') {
+      return [...list].sort((a, b) => {
+        const countA = a.completedOrdersCount || 0;
+        const countB = b.completedOrdersCount || 0;
+        return countB - countA;
+      });
+    }
+    return list;
+  }, [talents, selectedCategory, searchTerm, maxPriceFilter, sortBy]);
 
   const talentsWithIntro = useMemo(() => {
     return talents.filter(t => !!t.introVideoUrl);
@@ -82,6 +121,39 @@ const Home: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {globalDraft && (
+            <div className="mb-10 p-5 bg-gradient-to-r from-amber-50 to-amber-100/50 border border-amber-200 rounded-[1.8rem] flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm animate-fadeIn text-left">
+                <div className="flex gap-3.5 items-start">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                        <Play className="w-5 h-5 text-amber-600 fill-amber-600" />
+                    </div>
+                    <div>
+                        <h4 className="text-xs font-black text-amber-800 uppercase tracking-wider">Hai una prenotazione in corso!</h4>
+                        <p className="text-[11px] text-amber-700 font-bold leading-normal mt-0.5">
+                            La tua richiesta personalizzata per la star <span className="font-black text-slate-800">{globalDraft.talentName}</span> iniziata il {globalDraftTime} aspetta di essere inviata. Completa la prenotazione prima che scada!
+                        </p>
+                    </div>
+                </div>
+                <div className="flex gap-2.5 shrink-0">
+                    <a 
+                      href={`/talent/${globalDraft.talentId}`}
+                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase px-5 py-3 rounded-xl shadow transition duration-250 shrink-0 select-none cursor-pointer"
+                    >
+                      Completa Ora
+                    </a>
+                    <button 
+                      onClick={() => {
+                        localStorage.removeItem('ciao_star_abandoned_cart');
+                        setGlobalDraft(null);
+                      }}
+                      className="bg-white hover:bg-amber-50 border border-amber-200 text-amber-700 text-xs font-black uppercase px-4 py-3 rounded-xl transition duration-250 select-none cursor-pointer"
+                    >
+                      Ignora bozza
+                    </button>
+                </div>
+            </div>
+        )}
+
         {/* Category Chips & Price Filter */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-8 border-b border-gray-100 mb-8">
           <div className="flex items-center gap-3 overflow-x-auto no-scrollbar scroll-smooth py-1 flex-1">
@@ -180,11 +252,24 @@ const Home: React.FC = () => {
             </div>
         ) : (
             <>
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
                     <h2 className="text-2xl font-extrabold text-slate-900">
                         {selectedCategory === 'Tutti' ? 'I VIP del momento' : `Star in: ${selectedCategory}`}
                     </h2>
-                    <span className="text-slate-400 text-sm font-bold">{filteredTalents.length} Risultati</span>
+                    
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-tight">Ordina per:</span>
+                        <select 
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as any)}
+                            className="bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                        >
+                            <option value="featured">In evidenza</option>
+                            <option value="recent">Aggiunti di recente</option>
+                            <option value="popular">Più acquistati</option>
+                        </select>
+                        <span className="text-slate-400 text-xs font-bold bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 shrink-0">{filteredTalents.length} {filteredTalents.length === 1 ? 'risultato' : 'risultati'}</span>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

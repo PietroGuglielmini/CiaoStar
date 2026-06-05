@@ -33,6 +33,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
         disputeResolved: true,
         orderCompleted: true
     });
+    const [marketingMilestones, setMarketingMilestones] = useState(true);
     const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
     
     // Change Detection State
@@ -109,6 +110,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                     setFastDeliveryEnabled(initialFastEnabled);
                     setFastDeliveryIncrease(initialFastIncrease);
                     setResponseTime(initialResponse);
+                    setMarketingMilestones(t.marketing_milestones !== false);
 
                     // Set Initial State for Comparison
                     setInitialFormState({
@@ -120,7 +122,8 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                         fastDeliveryEnabled: initialFastEnabled,
                         fastDeliveryIncrease: initialFastIncrease,
                         responseTime: initialResponse,
-                        notificationPrefs: mergedPrefs
+                        notificationPrefs: mergedPrefs,
+                        marketingMilestones: t.marketing_milestones !== false
                     });
                 }
             } catch (e) {
@@ -145,6 +148,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             fastDeliveryEnabled !== initialFormState.fastDeliveryEnabled ||
             fastDeliveryIncrease !== initialFormState.fastDeliveryIncrease ||
             responseTime !== initialFormState.responseTime ||
+            marketingMilestones !== initialFormState.marketingMilestones ||
             avatarFile !== null ||
             JSON.stringify(notificationPrefs) !== JSON.stringify(initialFormState.notificationPrefs);
 
@@ -152,7 +156,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
     }, [
         displayName, price, category, bio, isAvailable, 
         fastDeliveryEnabled, fastDeliveryIncrease, responseTime, 
-        avatarFile, notificationPrefs, initialFormState
+        marketingMilestones, avatarFile, notificationPrefs, initialFormState
     ]);
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,7 +276,8 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 fastDeliveryPriceIncrease: Number(fastDeliveryIncrease),
                 responseTimeDays: Number(responseTime),
                 avatarUrl: newAvatarUrl,
-                notificationPreferences: notificationPrefs
+                notificationPreferences: notificationPrefs,
+                marketing_milestones: marketingMilestones
             });
 
             // Update initial state to match current (saved) state
@@ -283,9 +288,10 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 bio,
                 isAvailable,
                 fastDeliveryEnabled,
-                fastDeliveryIncrease: Number(fastDeliveryIncrease),
+                fastDeliveryPriceIncrease: Number(fastDeliveryIncrease),
                 responseTime: Number(responseTime),
-                notificationPrefs
+                notificationPrefs,
+                marketingMilestones: marketingMilestones
             });
             setAvatarFile(null); // Clear pending file
             setHasChanges(false);
@@ -667,6 +673,24 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                 </div>
                             );
                         })}
+                    </div>
+
+                    {/* GDPR Marketing Milestones Opt-Out Checkbox */}
+                    <div className="mt-6 pt-6 border-t border-slate-100">
+                        <label className="flex items-start gap-3 cursor-pointer p-4 rounded-xl border border-amber-100 bg-amber-50/50">
+                            <input 
+                                type="checkbox" 
+                                className="mt-0.5 h-4 w-4 text-indigo-600 rounded border-slate-200 focus:ring-indigo-500 cursor-pointer"
+                                checked={marketingMilestones}
+                                onChange={e => setMarketingMilestones(e.target.checked)}
+                            />
+                            <div>
+                                <span className="block text-xs font-extrabold text-slate-850 uppercase tracking-tight">Notifiche celebrate sui traguardi (GDPR Opt-Out)</span>
+                                <span className="block text-[10px] text-slate-500 font-bold leading-normal mt-0.5">
+                                    Consenti alla piattaforma di inviarti notifiche celebrative in-app ed email quando il tuo profilo raggiunge milestons di visualizzazioni o vendite tracciate.
+                                </span>
+                            </div>
+                        </label>
                     </div>
                 </div>
 

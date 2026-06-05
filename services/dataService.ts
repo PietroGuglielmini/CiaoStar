@@ -1795,4 +1795,55 @@ export const seedDatabaseAndStructure = async (): Promise<boolean> => {
     }
 };
 
+export const incrementProfileViews = async (talentId: string) => {
+    try {
+        const userRef = doc(db, 'users', talentId);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) return;
+        const userData = userSnap.data() as User;
+        const currentViews = userData.profileViews || 0;
+        const newViews = currentViews + 1;
+        
+        const updateData: any = {
+            profileViews: newViews
+        };
+        
+        // Controlla se l'utente ha optato per ricevere le notifiche delle milestone
+        if (userData.marketing_milestones !== false) {
+            const adminSettings = await getAdminSettings();
+            const milestones = adminSettings.viewMilestones || [10, 100, 1000, 5000];
+            const awarded = (userData as any).awardedMilestones || [];
+            
+            // Trova se è stato raggiunto un traguardo non ancora premiato
+            const reachedMilestone = milestones.find(m => newViews >= m && !awarded.includes(m));
+            if (reachedMilestone) {
+                updateData.awardedMilestones = [...awarded, reachedMilestone];
+                
+                // Crea una notifica celebrativa
+                await createNotification(
+                    talentId,
+                    "Traguardo Raggiunto! 🌟",
+                    `Complimenti! Il tuo profilo ha raggiunto ${reachedMilestone} visualizzazioni! Continua così!`,
+                    null
+                );
+            }
+        }
+        
+        await updateDoc(userRef, updateData);
+    } catch (err) {
+        console.error("Errore incremento visualizzazioni profilo:", err);
+    }
+};
+
+export const incrementImpressions = async (talentId: string) => {
+    try {
+        const userRef = doc(db, 'users', talentId);
+        await updateDoc(userRef, {
+            impressionsCount: increment(1)
+        });
+    } catch (err) {
+        console.error("Errore incremento impressioni:", err);
+    }
+};
+
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent, callCreatePaymentIntent, subscribeToOrderChanges } from '../services/dataService';
+import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent, callCreatePaymentIntent, subscribeToOrderChanges, incrementProfileViews } from '../services/dataService';
 import { applyTalentSEO } from '../services/seoService';
 import { Talent, User, AdminSettings, UserRole, Review } from '../types';
 import { OCCASIONS } from '../constants';
@@ -38,6 +38,11 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   const [cardExpiry, setCardExpiry] = useState('');
   const [cardCvc, setCardCvc] = useState('');
 
+  // Draft States for Abandoned Cart recovery
+  const [showDraftBanner, setShowDraftBanner] = useState(false);
+  const [draftData, setDraftData] = useState<any>(null);
+  const [draftTimeStr, setDraftTimeStr] = useState('');
+
   useEffect(() => {
     const load = async () => {
       if (id) {
@@ -54,11 +59,85 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
         setLoading(false);
         if (t) {
           applyTalentSEO(t.name, t.category);
+          
+          // Incrementa visualizzazioni profilo (GDPR compliant ed evita spam)
+          const sessionKey = `viewed_talent_${id}`;
+          if (!sessionStorage.getItem(sessionKey)) {
+            sessionStorage.setItem(sessionKey, 'true');
+            incrementProfileViews(id);
+          }
         }
       }
     };
     load();
   }, [id]);
+
+  // Draft auto-save side-effect (GDPR compliant - no payment data, config support)
+  useEffect(() => {
+    if (!talent || !currentUser) return;
+    if (paymentStep === 'success') {
+      localStorage.removeItem('ciao_star_abandoned_cart');
+      return;
+    }
+
+    if (recipient.trim() || instructions.trim()) {
+      const draft = {
+        talentId: talent.id,
+        talentName: talent.name,
+        recipient,
+        instructions,
+        occasion,
+        allowPublicSample,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('ciao_star_abandoned_cart', JSON.stringify(draft));
+    }
+  }, [recipient, instructions, occasion, allowPublicSample, talent, currentUser, paymentStep]);
+
+  // Draft loading and verification on mount
+  useEffect(() => {
+    if (!talent) return;
+    const raw = localStorage.getItem('ciao_star_abandoned_cart');
+    if (raw) {
+      try {
+        const draft = JSON.parse(raw);
+        if (draft.talentId === talent.id) {
+          // Verify expiry setup in admin global configuration
+          const expiryHours = settings?.cartExpiryHours || 24;
+          const draftDate = new Date(draft.timestamp);
+          const ageHours = (new Date().getTime() - draftDate.getTime()) / (1000 * 60 * 60);
+          
+          if (ageHours <= expiryHours) {
+            // Also ensure we only offer restoration if current fields are still empty
+            if (!recipient && !instructions) {
+              setDraftData(draft);
+              setDraftTimeStr(draftDate.toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }));
+              setShowDraftBanner(true);
+            }
+          } else {
+            localStorage.removeItem('ciao_star_abandoned_cart');
+          }
+        }
+      } catch (err) {
+        console.error("Errore nel parsing del carrello abbandonato:", err);
+      }
+    }
+  }, [talent, settings]);
+
+  const restoreDraft = () => {
+    if (draftData) {
+      setRecipient(draftData.recipient || '');
+      setInstructions(draftData.instructions || '');
+      setOccasion(draftData.occasion || OCCASIONS[0]);
+      setAllowPublicSample(draftData.allowPublicSample !== false);
+    }
+    setShowDraftBanner(false);
+  };
+
+  const discardDraft = () => {
+    localStorage.removeItem('ciao_star_abandoned_cart');
+    setShowDraftBanner(false);
+  };
 
   const initiateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,15 +338,45 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                         </div>
                         <p className="text-slate-500 font-medium text-lg leading-relaxed mb-6">{talent.bio}</p>
                         
-                        {reviews.length > 0 && (
-                            <div className="bg-gray-50 p-4 rounded-2xl text-center border border-gray-100/50">
-                                <Star className="w-5 h-5 text-amber-400 fill-current mx-auto mb-1" />
-                                <span className="text-lg font-black text-slate-900">
-                                    {(reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)}
-                                </span>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Rating ({reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'})</p>
+                        <div className="grid grid-cols-3 shadow-sm rounded-2xl border border-gray-100 overflow-hidden mb-6">
+                            <div className="bg-gray-50/50 p-4 text-center border-r border-gray-100 flex flex-col justify-center">
+                                <div className="text-lg font-black text-slate-900">
+                                    €{talent.price}
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Prezzo base</p>
                             </div>
-                        )}
+                            
+                            <div className="bg-gray-50/50 p-4 text-center border-r border-gray-100 flex flex-col justify-center">
+                                {talent.completedOrdersCount ? (
+                                    <div className="text-lg font-black text-indigo-600">
+                                        {talent.completedOrdersCount}
+                                    </div>
+                                ) : (
+                                    <div className="text-xs font-black text-emerald-500 flex items-center justify-center gap-0.5">
+                                        Nuovo <Zap className="w-3 h-3 text-amber-400 fill-current" />
+                                    </div>
+                                )}
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Ordini completati</p>
+                            </div>
+
+                            <div className="bg-gray-50/50 p-4 text-center flex flex-col justify-center">
+                                {reviews.length > 0 ? (
+                                    <div className="flex items-center justify-center gap-1">
+                                        <span className="text-lg font-black text-slate-900">
+                                            {(reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)}
+                                        </span>
+                                        <Star className="w-4 h-4 text-amber-400 fill-current" />
+                                    </div>
+                                ) : (
+                                    <div className="text-xs font-black text-slate-400">
+                                        -
+                                    </div>
+                                )}
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+                                    Rating ({reviews.length})
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -333,6 +442,36 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                     <h2 className="text-2xl font-extrabold text-slate-900 mb-2">Prenota il tuo video</h2>
                     <p className="text-slate-400 font-medium mb-10">Compila i dettagli qui sotto per richiedere il tuo video personalizzato.</p>
                     
+                    {showDraftBanner && (
+                        <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 text-left animate-fadeIn">
+                            <div className="flex gap-3 items-start">
+                                <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-xs font-black text-amber-800 uppercase tracking-tight">Hai una bozza in sospeso</p>
+                                    <p className="text-[10px] text-amber-700 font-bold leading-normal mt-0.5">
+                                        Hai iniziato a compilare una richiesta per {talent.name} il {draftTimeStr}. Vuoi ripristinare i dati salvati?
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                                <button 
+                                    type="button" 
+                                    onClick={restoreDraft}
+                                    className="bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-black uppercase px-3.5 py-2 rounded-xl shadow transition"
+                                >
+                                    Sì, Ripristina
+                                </button>
+                                <button 
+                                    type="button" 
+                                    onClick={discardDraft}
+                                    className="bg-white border border-amber-200 text-amber-700 hover:bg-amber-100 text-[10px] font-black uppercase px-3.5 py-2 rounded-xl transition"
+                                >
+                                    No, Cancella
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <form onSubmit={initiateBooking} className="space-y-8">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">

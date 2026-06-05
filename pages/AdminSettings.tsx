@@ -1060,6 +1060,55 @@ const AdminSettings: React.FC = () => {
                                 />
                             </div>
                         </div>
+
+                        {/* Social Platform Links */}
+                        <div className="pt-4 border-t border-slate-100 space-y-3 text-left">
+                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-wider">Social Link della Piattaforma (Footer)</label>
+                            <p className="text-[9px] text-slate-400 font-semibold leading-relaxed">Inserisci URL completi per i canali social. Lascia vuoto per non visualizzare l'icona.</p>
+                            {[0, 1, 2, 3, 4].map(idx => (
+                                <input 
+                                    key={idx}
+                                    type="text" 
+                                    placeholder={`Social Link #${idx + 1} (es. https://instagram.com/ciaostar)`}
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={settings?.socialLinks?.[idx] ?? ''}
+                                    onChange={e => {
+                                        const arr = [...(settings?.socialLinks || [])];
+                                        while (arr.length <= idx) arr.push('');
+                                        arr[idx] = e.target.value;
+                                        setSettings({...settings!, socialLinks: arr});
+                                    }}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Milestones & Abandoned Cart Settings */}
+                        <div className="pt-4 border-t border-slate-100 space-y-4 text-left">
+                            <h3 className="text-xs font-black text-indigo-600 uppercase tracking-widest">Contatori, Soglie e Carrello</h3>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Traguardi Alert Visualizzazioni (Milestones dei Talenti, separati da virgole)</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="es. 10, 100, 1000, 5000"
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={settings?.viewMilestones?.join(', ') ?? '10, 100, 1000, 5000'}
+                                    onChange={e => {
+                                        const nums = e.target.value.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+                                        setSettings({...settings!, viewMilestones: nums});
+                                    }}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Scadenza Carrello Abbandonato (Ore di memoria di sessione legale)</label>
+                                <input 
+                                    type="number" 
+                                    placeholder="es. 48"
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={settings?.cartExpiryHours ?? 48}
+                                    onChange={e => setSettings({...settings!, cartExpiryHours: Number(e.target.value) || 48})}
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     <div className="pt-2">

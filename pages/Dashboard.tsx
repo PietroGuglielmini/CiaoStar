@@ -908,6 +908,48 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
             )}
         </div>
 
+        {/* Visibility & Conversions Insights for Talent */}
+        {isTalent && (
+            <div className="bg-slate-900 text-white rounded-[2rem] p-8 mb-10 border border-slate-950 shadow-xl text-left space-y-6">
+                <div>
+                    <h3 className="text-sm font-black uppercase text-indigo-400 tracking-wider">Statistiche di Visibilità & Conversioni (Insights)</h3>
+                    <p className="text-[11px] text-slate-400 font-medium">Analizza l'andamento del tuo profilo e trova suggerimenti utili per massimizzare le tue vendite.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-2">
+                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Impression (Risultati di Ricerca)</div>
+                        <div className="text-3xl font-black text-white">{user.impressionsCount ?? 0}</div>
+                        <div className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                            Numero di volte che la tua scheda Star è comparsa nei risultati di ricerca o nella galleria dei filtri della homepage.
+                        </div>
+                    </div>
+
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-2">
+                        <div className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Visualizzazioni Profilo</div>
+                        <div className="text-3xl font-black text-white">{user.profileViews ?? 0}</div>
+                        <div className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                            Numero di visite uniche sul tuo profilo personale. Questa metrica indica quanti utenti si sono interessati ai tuoi dettagli.
+                        </div>
+                    </div>
+
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-2">
+                        <div className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">CTR / Conversione Vendite</div>
+                        <div className="text-3xl font-black text-white">
+                            {user.profileViews ? ((stats.total / user.profileViews) * 100).toFixed(1) : '0.0'}%
+                        </div>
+                        <div className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                            Percentuale di clic e ordini iniziati rispetto alle visualizzazioni reali del tuo profilo. Un tasso medio sano è tra il 2% e l'8%.
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] text-slate-400 font-semibold leading-relaxed">
+                    💡 Suggerimento: Se il tuo CTR è basso, ti consigliamo di caricare un video di invito/benvenuto stimolante per convincere i visitatori o di regolare la tua fascia di prezzo per allinearti alla domanda.
+                </div>
+            </div>
+        )}
+
         {/* Requests List */}
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-4">

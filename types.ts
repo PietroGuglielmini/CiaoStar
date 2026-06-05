@@ -86,6 +86,9 @@ export interface AdminSettings {
   seoDefaultDescription?: string;
   seoOgImage?: string;
   seoIndexTalents?: boolean;
+  socialLinks?: string[];
+  viewMilestones?: number[];
+  cartExpiryHours?: number;
 }
 
 export interface User {
@@ -109,6 +112,10 @@ export interface User {
   sentStaffMessageTimestamps?: string[];
   notificationPreferences?: InAppNotificationSettings;
   customCommissionPercent?: number | null;
+  marketing_milestones?: boolean;
+  completedOrdersCount?: number;
+  profileViews?: number;
+  impressionsCount?: number;
 }
 
 export interface Talent extends User {
