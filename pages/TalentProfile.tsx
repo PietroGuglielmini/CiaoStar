@@ -33,6 +33,9 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -110,32 +113,118 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     setPaymentStep('processing');
     setPaymentError(null);
 
-    // Simulazione del Web SDK Stripe (es. const cardElement = elements.create('card'); stripe.confirmCardPayment)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Check if a real or custom publishable Stripe key is configured
+    const isRealStripe = settings.stripePublishableKey && settings.stripePublishableKey.trim().startsWith('pk_');
 
-    try {
-        // Aggiorna lo stato su Firestore a PAID_AWAITING_VIDEO
-        const { updateRequestStatus } = await import('../services/dataService');
-        await updateRequestStatus(createdOrderId, 'PAID_AWAITING_VIDEO' as any);
+    if (isRealStripe) {
+        try {
+            // 1. Load Stripe.js if not loaded
+            if (!(window as any).Stripe) {
+                await new Promise<void>((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = "https://js.stripe.com/v3/";
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error("Impossible to load Stripe.js library - please verify your internet connection."));
+                    document.body.appendChild(script);
+                });
+            }
 
-        setPaymentStep('success');
-        confetti({
-            particleCount: 150,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#7C3AED', '#DB2777', '#3B82F6']
-        });
+            // 2. Initialize Stripe
+            const stripe = (window as any).Stripe(settings.stripePublishableKey!.trim());
+            
+            // 3. Simple validations on custom fields
+            const cardExpiryParts = cardExpiry.split('/');
+            if (cardExpiryParts.length !== 2) {
+                throw new Error("Scadenza non valida. Usa il formato MM/AA.");
+            }
+            const expMonth = parseInt(cardExpiryParts[0], 10);
+            const expYear = parseInt('20' + cardExpiryParts[1], 10);
 
-        setTimeout(() => {
-            setShowPaymentModal(false);
-            navigate('/dashboard');
-        }, 3000);
+            if (isNaN(expMonth) || isNaN(expYear) || expMonth < 1 || expMonth > 12) {
+                throw new Error("Mese o anno di scadenza non valido.");
+            }
 
-    } catch (e: any) {
-        console.error("Errore durante la transazione:", e);
-        setPaymentError(e?.message || "Errore di transazione durante l'addebito Stripe.");
-        setPaymentStep('idle');
-        setIsProcessingPayment(false);
+            const cleanCardNum = cardNumber.replace(/\s/g, '');
+            if (cleanCardNum.length < 15) {
+                throw new Error("Numero di carta non valido.");
+            }
+
+            if (cardCvc.trim().length < 3) {
+                throw new Error("CVC non valido (minimo 3 cifre).");
+            }
+
+            if (!clientSecret) {
+                throw new Error("Stripe client secret non generato. Riprova.");
+            }
+
+            // 4. Confirm Card payment via Stripe Web SDK
+            const result = await stripe.confirmCardPayment(clientSecret, {
+                payment_method: {
+                    card: {
+                        number: cleanCardNum,
+                        exp_month: expMonth,
+                        exp_year: expYear,
+                        cvc: cardCvc.trim()
+                    },
+                    billing_details: {
+                        name: currentUser.name || "Fan Utente",
+                        email: currentUser.email || ""
+                    }
+                }
+            });
+
+            if (result.error) {
+                throw new Error(result.error.message || "Pagamento fallito tramite Stripe.");
+            }
+
+            // The Stripe Webhook on backend handles PAID_AWAITING_VIDEO, but let's notify client
+            setPaymentStep('success');
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#7C3AED', '#DB2777', '#3B82F6']
+            });
+
+            setTimeout(() => {
+                setShowPaymentModal(false);
+                navigate('/dashboard');
+            }, 3000);
+
+        } catch (e: any) {
+            console.error("Stripe Transaction Error:", e);
+            setPaymentError(e?.message || "Errore di transazione durante l'addebito Stripe.");
+            setPaymentStep('idle');
+            setIsProcessingPayment(false);
+        }
+    } else {
+        // Safe Simulated Sandbox Mode fallback (no keys registered yet)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        try {
+            // Aggiorna lo stato su Firestore a PAID_AWAITING_VIDEO
+            const { updateRequestStatus } = await import('../services/dataService');
+            await updateRequestStatus(createdOrderId, 'PAID_AWAITING_VIDEO' as any);
+
+            setPaymentStep('success');
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#7C3AED', '#DB2777', '#3B82F6']
+            });
+
+            setTimeout(() => {
+                setShowPaymentModal(false);
+                navigate('/dashboard');
+            }, 3000);
+
+        } catch (e: any) {
+            console.error("Errore durante la transazione simulata:", e);
+            setPaymentError(e?.message || "Errore di transazione durante l'addebito Stripe.");
+            setPaymentStep('idle');
+            setIsProcessingPayment(false);
+        }
     }
   };
 
@@ -422,17 +511,19 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                                                     className="input-main pl-11 bg-white text-xs py-3 border border-gray-200 rounded-xl" 
                                                     placeholder="4242 4242 4242 4242"
                                                     maxLength={19} 
+                                                    value={cardNumber}
+                                                    onChange={(e) => setCardNumber(e.target.value)}
                                                   />
                                               </div>
                                           </div>
                                           <div className="grid grid-cols-2 gap-3">
                                               <div>
                                                   <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Scadenza</label>
-                                                  <input type="text" className="input-main bg-white text-xs py-3 text-center border border-gray-200 rounded-xl" placeholder="MM/AA" maxLength={5} />
+                                                  <input type="text" className="input-main bg-white text-xs py-3 text-center border border-gray-200 rounded-xl" placeholder="MM/AA" maxLength={5} value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} />
                                               </div>
                                               <div>
                                                   <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CVC</label>
-                                                  <input type="text" className="input-main bg-white text-xs py-3 text-center border border-gray-200 rounded-xl" placeholder="123" maxLength={3} />
+                                                  <input type="text" className="input-main bg-white text-xs py-3 text-center border border-gray-200 rounded-xl" placeholder="123" maxLength={3} value={cardCvc} onChange={(e) => setCardCvc(e.target.value)} />
                                               </div>
                                           </div>
                                       </div>

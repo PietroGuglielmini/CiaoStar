@@ -5,13 +5,23 @@ import Stripe from 'stripe';
 admin.initializeApp();
 const db = admin.firestore();
 
-// Lazy initialization of Stripe using environment variable
+// Lazy initialization of Stripe with dynamic database configuration fallback
 let stripeClient: Stripe | null = null;
-const getStripe = (): Stripe => {
+const getStripeAsync = async (): Promise<Stripe> => {
     if (!stripeClient) {
-        const key = process.env.STRIPE_SECRET_KEY;
+        let key = process.env.STRIPE_SECRET_KEY;
         if (!key) {
-            throw new Error('STRIPE_SECRET_KEY environment variable is required');
+            try {
+                const configSnap = await db.collection('settings').doc('global_config').get();
+                if (configSnap.exists) {
+                    key = configSnap.data()?.stripeSecretKey;
+                }
+            } catch (err) {
+                console.warn("Could not retrieve stripeSecretKey from Firestore settings/global_config doc:", err);
+            }
+        }
+        if (!key) {
+            throw new Error('STRIPE_SECRET_KEY environment variable is missing and not configured in global settings.');
         }
         stripeClient = new Stripe(key, {
             apiVersion: '2023-10-16' as any,
@@ -37,7 +47,7 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
     }
 
     try {
-        const stripe = getStripe();
+        const stripe = await getStripeAsync();
         
         // Retrieve the order from Firestore to check validity
         const orderSnap = await db.collection('orders').doc(orderId).get();
@@ -93,11 +103,33 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
         return;
     }
 
-    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    let endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    let stripeKey = process.env.STRIPE_SECRET_KEY;
     let event: Stripe.Event;
 
     try {
-        const stripe = getStripe();
+        if (!stripeKey || !endpointSecret) {
+            try {
+                const configSnap = await db.collection('settings').doc('global_config').get();
+                if (configSnap.exists) {
+                    const data = configSnap.data();
+                    if (!stripeKey) stripeKey = data?.stripeSecretKey;
+                    if (!endpointSecret) endpointSecret = data?.stripeWebhookSecret;
+                }
+            } catch (dbErr) {
+                console.warn("Could not retrieve Stripe config dynamically for webhook:", dbErr);
+            }
+        }
+
+        if (!stripeKey) {
+            res.status(500).send('Webhook Error: Stripe Secret Key is not configured.');
+            return;
+        }
+
+        const stripe = new Stripe(stripeKey, {
+            apiVersion: '2023-10-16' as any,
+        });
+
         // Read raw body if available (usually req.rawBody contains the buffered body in Cloud Functions)
         const rawBody = (req as any).rawBody || req.body;
         event = stripe.webhooks.constructEvent(rawBody, signature, endpointSecret || '');
@@ -374,7 +406,7 @@ export const completeOrderAndSplit = functions.firestore
                     } else {
                         const payoutAmount = pricePaid - appFee;
                         if (payoutAmount > 0) {
-                            const stripe = getStripe();
+                            const stripe = await getStripeAsync();
                             const transfer = await stripe.transfers.create({
                                 amount: Math.round(payoutAmount * 100), // Stripe expects cents
                                 currency: 'eur',
@@ -491,7 +523,7 @@ export const stripeOnboardTalent = functions.https.onCall(async (data, context) 
     }
 
     try {
-        const stripe = getStripe();
+        const stripe = await getStripeAsync();
         const userId = context.auth.uid;
 
         // Retrieve User's existing Connect Account ID or create a new one
