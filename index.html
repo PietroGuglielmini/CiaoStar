@@ -1,0 +1,131 @@
+
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CIAOSTAR | Video messaggi dai tuoi VIP preferiti</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+      
+      :root {
+        --color-primary: #7C3AED;
+        --color-primary-hover: #6D28D9;
+        --color-accent: #DB2777;
+        --color-bg: #F9FAFB;
+        --font-main: 'Plus Jakarta Sans', sans-serif;
+      }
+
+      body {
+        font-family: var(--font-main);
+        background-color: var(--color-bg);
+        color: #111827;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .btn-primary {
+        background-color: var(--color-primary);
+        color: white;
+        font-weight: 700;
+        padding: 0.75rem 1.5rem;
+        border-radius: 1rem;
+        transition: all 0.2s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        box-shadow: 0 4px 14px 0 rgba(124, 58, 237, 0.39);
+      }
+
+      .btn-primary:hover {
+        background-color: var(--color-primary-hover);
+        transform: translateY(-1px);
+        box-shadow: 0 6px 20px rgba(124, 58, 237, 0.23);
+      }
+
+      .btn-secondary {
+        background-color: white;
+        color: #111827;
+        font-weight: 700;
+        padding: 0.75rem 1.5rem;
+        border-radius: 1rem;
+        border: 1px solid #E5E7EB;
+        transition: all 0.2s ease;
+      }
+
+      .btn-secondary:hover {
+        background-color: #F3F4F6;
+        border-color: #D1D5DB;
+      }
+
+      .card-star {
+        background: white;
+        border-radius: 1.5rem;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid #F3F4F6;
+      }
+
+      .card-star:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+
+      .input-main {
+        background: white;
+        border: 1px solid #E5E7EB;
+        border-radius: 1rem;
+        padding: 0.875rem 1rem;
+        width: 100%;
+        transition: all 0.2s ease;
+      }
+
+      .input-main:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        ring: 2px;
+        ring-color: rgba(124, 58, 237, 0.1);
+      }
+
+      /* Badge e tag */
+      .badge-category {
+        background: rgba(124, 58, 237, 0.1);
+        color: var(--color-primary);
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.25rem 0.75rem;
+        border-radius: 2rem;
+        text-transform: uppercase;
+      }
+
+      ::-webkit-scrollbar { width: 8px; }
+      ::-webkit-scrollbar-track { background: #F1F1F1; }
+      ::-webkit-scrollbar-thumb { background: #C5C5C5; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: #A0A0A0; }
+    </style>
+    <script type="importmap">
+{
+  "imports": {
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+    "firebase/storage": "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "canvas-confetti": "https://aistudiocdn.com/canvas-confetti@^1.9.4"
+  }
+}
+</script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

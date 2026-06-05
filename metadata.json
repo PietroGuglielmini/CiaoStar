@@ -1,0 +1,9 @@
+{
+  "name": "CiaoStar",
+  "description": "La piattaforma italiana per ricevere video messaggi personalizzati dalle tue star preferite.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": []
+}
