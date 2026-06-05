@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Talent, User, AdminSettings, InAppNotificationSettings } from '../types';
-import { syncUserToDB, updateTalentProfile, getCategories, uploadAvatar, uploadIntroVideo, getAdminSettings } from '../services/dataService';
+import { syncUserToDB, updateTalentProfile, getCategories, uploadAvatar, uploadIntroVideo, getAdminSettings, callStripeOnboardTalent } from '../services/dataService';
 import { moderateText } from '../services/geminiService';
-import { Loader2, Save, DollarSign, Clock, Zap, AlertTriangle, Tag, ChevronDown, Camera, User as UserIcon, Video, Bell } from 'lucide-react';
+import { Loader2, Save, DollarSign, Clock, Zap, AlertTriangle, Tag, ChevronDown, Camera, User as UserIcon, Video, Bell, CreditCard, CheckCircle } from 'lucide-react';
 
 interface TalentSettingsProps {
     user: User;
@@ -204,6 +204,28 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
         }
     };
 
+    const [onboardingLoading, setOnboardingLoading] = useState(false);
+
+    const handleStripeOnboarding = async () => {
+        setOnboardingLoading(true);
+        try {
+            const returnUrl = window.location.href; 
+            const refreshUrl = window.location.href;
+
+            const res = await callStripeOnboardTalent(returnUrl, refreshUrl);
+            if (res && res.url) {
+                window.location.href = res.url;
+            } else {
+                throw new Error("Stripe did not return an onboarding URL.");
+            }
+        } catch (err: any) {
+            console.error("Errore onboarding Stripe (Connect):", err);
+            alert("Errore per la connessione Stripe Connect: " + (err?.message || err));
+        } finally {
+            setOnboardingLoading(false);
+        }
+    };
+
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setSaving(true);
@@ -288,6 +310,64 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
 
             <form onSubmit={handleSave} className="space-y-8">
                 
+                {/* Stripe Connect Integration */}
+                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8">
+                    <h2 className="text-lg font-bold text-slate-900 mb-2 flex items-center">
+                        <CreditCard className="w-5 h-5 mr-3 text-indigo-600" />
+                        Metodo di Pagamento (Stripe Connect)
+                    </h2>
+                    <p className="text-xs text-slate-400 mb-6 uppercase font-bold tracking-wider">
+                        Ricevi l'80% di ogni ordine direttamente sul tuo conto corrente bancario o carta di credito
+                    </p>
+
+                    {talent?.stripeAccountId ? (
+                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 flex items-start gap-4">
+                            <CheckCircle className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="text-sm font-black text-emerald-950 uppercase tracking-tight">Account Stripe Collegato</h4>
+                                <p className="text-xs text-emerald-700 font-medium mt-1 leading-relaxed">
+                                    Il tuo account Stripe Connect (<span className="font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded text-[10px]">{talent.stripeAccountId}</span>) è attivo e configurato per ricevere rimesse dirette (Split 80/20).
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handleStripeOnboarding}
+                                    disabled={onboardingLoading}
+                                    className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-2 select-none cursor-pointer border border-emerald-500/20"
+                                >
+                                    {onboardingLoading ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : "Gestisci o Aggiorna Account Stripe"}
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-indigo-50/20 border border-indigo-100/50 rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div className="space-y-1">
+                                <h4 className="text-sm font-black text-indigo-950 uppercase tracking-tight">Onboarding non completato</h4>
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-md">
+                                    Per poter ricevere pagamenti dai fan, devi completare la procedura guidata di Stripe Connect e attivare il tuo conto Express.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleStripeOnboarding}
+                                disabled={onboardingLoading}
+                                className="w-full md:w-auto px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-md uppercase tracking-widest flex items-center justify-center gap-2 select-none cursor-pointer border border-indigo-500/35 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                            >
+                                {onboardingLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                        <span>Inizializzazione...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <CreditCard className="w-4 h-4 pointer-events-none" />
+                                        <span>Collega Stripe Connect</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 {/* 0. Avatar & Bio */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center">

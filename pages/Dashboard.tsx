@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { User, UserRole, VideoRequest, RequestStatus, AdminSettings } from '../types';
-import { getRequestsForUser, updateRequestStatus, uploadVideo, getTalents, uploadVideoOnly, deliverVideo, acceptVideoDefinitively, openDispute, correctVideoRequest, getAdminSettings, submitReview, subscribeToRequestsForUser, updateTalentProfile, syncUserToDB, deleteUserAccount } from '../services/dataService';
+import { getRequestsForUser, updateRequestStatus, uploadVideo, getTalents, uploadVideoOnly, deliverVideo, acceptVideoDefinitively, openDispute, correctVideoRequest, getAdminSettings, submitReview, subscribeToRequestsForUser, updateTalentProfile, syncUserToDB, deleteUserAccount, uploadVideoResumable, uploadAndDeliverVideoResumable, uploadVideoOnlyResumable } from '../services/dataService';
 import { auth } from '../firebaseConfig';
 import { deleteUser } from 'firebase/auth';
 import VideoPlayer from '../components/VideoPlayer';
@@ -182,6 +182,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       durationOk: false,
       audioClear: false
   });
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   // Camera Recorder States
   const [activeTab, setActiveTab] = useState<'upload' | 'record'>('upload');
@@ -734,17 +735,21 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const handleUploadOnly = async (orderId: string) => {
       if (!uploadFile) return;
       setIsUploading(true);
+      setUploadProgress(0);
       try {
-          await uploadVideoOnly(uploadFile, orderId);
+          await uploadVideoOnlyResumable(uploadFile, orderId, (pct) => {
+              setUploadProgress(pct);
+          });
           setUploadFile(null);
           setForceShowSelectorId(null);
-          alert("Video caricato ed elaborato con successo! Verifica l'anteprima, conferma i requisiti di qualità e clicca su 'Consegna al Fan' per completare.");
+          alert("Video caricato con successo in modalità RESILIENTE! Verifica l'anteprima, conferma i requisiti di qualità e clicca su 'Consegna al Fan' per completare.");
           refresh();
       } catch (e: any) {
           console.error(e);
-          alert("Errore durante il caricamento del video: " + (e.message || "riprova."));
+          alert("Errore durante il caricamento resiliente del video: " + (e.message || "riprova."));
       } finally {
           setIsUploading(false);
+          setUploadProgress(0);
       }
   };
 
@@ -776,18 +781,22 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       }
 
       setIsUploading(true);
+      setUploadProgress(0);
       try {
-          await uploadVideo(uploadFile, orderId, qualityCheck);
+          await uploadAndDeliverVideoResumable(uploadFile, orderId, qualityCheck, (pct) => {
+              setUploadProgress(pct);
+          });
           setUploadingId(null);
           setUploadFile(null);
           setQualityCheck({ nameSaid: false, durationOk: false, audioClear: false });
-          alert("Video caricato con successo!");
+          alert("Video caricato ed elaborato con successo in modalità RESILIENTE! Fondi trasferiti ed ordine completato.");
           refresh();
       } catch (e: any) {
           console.error(e);
-          alert("Errore durante l'upload.");
+          alert("Errore durante il caricamento resiliente del video: " + (e.message || "riprova."));
       } finally {
           setIsUploading(false);
+          setUploadProgress(0);
       }
   };
 
@@ -1127,17 +1136,32 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                                                                         </label>
 
                                                                         {uploadFile && (
-                                                                            <button 
-                                                                                disabled={isUploading}
-                                                                                onClick={() => handleUploadOnly(req.id)}
-                                                                                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg transition-all"
-                                                                            >
-                                                                                {isUploading ? (
-                                                                                    <><Loader2 className="animate-spin w-4 h-4" /> Elaborazione e Caricamento in corso...</>
-                                                                                ) : (
-                                                                                    <><Upload className="w-4 h-4" /> Carica ed Elabora Video</>
+                                                                            <div className="space-y-3">
+                                                                                <button 
+                                                                                    disabled={isUploading}
+                                                                                    onClick={() => handleUploadOnly(req.id)}
+                                                                                    className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-lg transition-all disabled:opacity-50"
+                                                                                >
+                                                                                    {isUploading ? (
+                                                                                        <><Loader2 className="animate-spin w-4 h-4" /> Caricamento Resiliente ({uploadProgress}%) ...</>
+                                                                                    ) : (
+                                                                                        <><Upload className="w-4 h-4" /> Carica ed Elabora Video</>
+                                                                                    )}
+                                                                                </button>
+                                                                                {isUploading && (
+                                                                                    <div className="space-y-1">
+                                                                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                                                                            <div 
+                                                                                                className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                                                                                                style={{ width: `${uploadProgress}%` }}
+                                                                                            />
+                                                                                        </div>
+                                                                                        <span className="text-[10px] text-slate-400 font-bold block text-center uppercase tracking-wider">
+                                                                                            Connessione stabile: {uploadProgress}% caricato
+                                                                                        </span>
+                                                                                    </div>
                                                                                 )}
-                                                                            </button>
+                                                                            </div>
                                                                         )}
                                                                     </div>
                                                                 ) : (

@@ -4,7 +4,8 @@ import {
   collection, addDoc, getDocs, query, where, updateDoc, doc, getDoc, setDoc, 
   orderBy, limit, serverTimestamp, increment, onSnapshot, deleteDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, SettableMetadata, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, SettableMetadata, deleteObject, uploadBytesResumable } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Talent, User, UserRole, VideoRequest, RequestStatus, AdminSettings, AuditLog, ChatMessage, Conversation, VerificationStatus, DisputeCategory, InAppNotification, Review } from '../types';
 import { ADMIN_EMAIL, DEFAULT_ADMIN_SETTINGS, DB_CATEGORIES_SEED } from '../constants';
 import { addWatermarkToVideo } from './videoUtils';
@@ -1502,4 +1503,158 @@ export const deleteUserAccount = async (userId: string) => {
         throw e;
     }
 };
+
+/**
+ * CLIENT-SIDE STRIPE CONNECT HELPERS
+ */
+
+export const callCreatePaymentIntent = async (orderId: string, amount: number): Promise<{ clientSecret: string, paymentIntentId: string }> => {
+    const functions = getFunctions();
+    const createIntentFn = httpsCallable<{ orderId: string, amount: number }, { clientSecret: string, paymentIntentId: string }>(functions, 'createPaymentIntent');
+    const result = await createIntentFn({ orderId, amount });
+    return result.data;
+};
+
+export const callStripeOnboardTalent = async (returnUrl: string, refreshUrl: string): Promise<{ url: string }> => {
+    const functions = getFunctions();
+    const onboardFn = httpsCallable<{ returnUrl: string, refreshUrl: string }, { url: string }>(functions, 'stripeOnboardTalent');
+    const result = await onboardFn({ returnUrl, refreshUrl });
+    return result.data;
+};
+
+export const subscribeToOrderChanges = (orderId: string, callback: (order: VideoRequest) => void): () => void => {
+    return onSnapshot(doc(db, 'orders', orderId), (snapshot) => {
+        if (snapshot.exists()) {
+            callback({ id: snapshot.id, ...snapshot.data() } as VideoRequest);
+        }
+    });
+};
+
+export const uploadVideoResumable = async (
+    file: File, 
+    requestId: string, 
+    onProgress: (progress: number) => void
+): Promise<string> => {
+    const settings = await getAdminSettings();
+    let fileToUpload: Blob = file;
+    let finalExtension = file.name.split('.').pop() || 'mp4';
+
+    try {
+        const processed = await addWatermarkToVideo(file, settings);
+        fileToUpload = processed.blob;
+        finalExtension = processed.extension;
+    } catch (e) {
+        console.error("Video formatting/watermarking failed, uploading original:", e);
+    }
+
+    const fileName = `${requestId}_${Date.now()}.${finalExtension}`;
+    const storageRef = ref(storage, `videos/${fileName}`);
+    
+    const metadata: SettableMetadata = {
+        contentDisposition: `attachment; filename="ciaostar_video_${requestId}.${finalExtension}"`,
+        contentType: `video/${finalExtension === 'mp4' ? 'mp4' : 'webm'}`,
+        cacheControl: 'public,max-age=3600'
+    };
+
+    return new Promise((resolve, reject) => {
+        const uploadTask = uploadBytesResumable(storageRef, fileToUpload, metadata);
+
+        uploadTask.on('state_changed', 
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                onProgress(Math.round(progress));
+            }, 
+            (error) => {
+                console.error("Resumable upload failed:", error);
+                reject(error);
+            }, 
+            async () => {
+                try {
+                    const url = await getDownloadURL(uploadTask.snapshot.ref);
+                    resolve(url);
+                } catch (urlErr) {
+                    reject(urlErr);
+                }
+            }
+        );
+    });
+};
+
+export const uploadAndDeliverVideoResumable = async (
+    file: File, 
+    requestId: string, 
+    qualityCheck: VideoRequest['talentQualityCheck'],
+    onProgress: (pct: number) => void
+): Promise<void> => {
+    const url = await uploadVideoResumable(file, requestId, onProgress);
+    
+    const orderRef = doc(db, 'orders', requestId);
+    const orderSnap = await getDoc(orderRef);
+    const orderData = orderSnap.exists() ? (orderSnap.data() as VideoRequest) : {} as VideoRequest;
+    const history = orderData.history || [];
+
+    const newEvent = {
+        action: "Video consegnato via caricamento resiliente",
+        timestamp: new Date().toISOString(),
+        note: "Video caricato ed elaborato con successo in modalità a prova di disconnessione."
+    };
+
+    let finalExtension = file.name.split('.').pop() || 'mp4';
+    await addDoc(collection(db, 'videos'), {
+        createdAt: new Date().toISOString(),
+        format: `video/${finalExtension === 'mp4' ? 'mp4' : 'webm'}`,
+        requestId: requestId,
+        sizeBytes: file.size,
+        talentId: orderData.talentId || 'unknown',
+        url: url,
+        views: 0
+    });
+
+    await updateDoc(orderRef, { 
+        videoUrl: url, 
+        status: RequestStatus.COMPLETED,
+        updatedAt: new Date().toISOString(),
+        deliveredAt: new Date().toISOString(),
+        talentQualityCheck: qualityCheck,
+        history: [...history, newEvent]
+    });
+};
+
+export const uploadVideoOnlyResumable = async (
+    file: File, 
+    requestId: string, 
+    onProgress: (pct: number) => void
+): Promise<string> => {
+    const url = await uploadVideoResumable(file, requestId, onProgress);
+
+    const orderRef = doc(db, 'orders', requestId);
+    const orderSnap = await getDoc(orderRef);
+    const orderData = orderSnap.exists() ? (orderSnap.data() as VideoRequest) : {} as VideoRequest;
+    const history = orderData.history || [];
+
+    const newEvent = {
+        action: "Bozza caricata in modalità resiliente",
+        timestamp: new Date().toISOString()
+    };
+
+    let finalExtension = file.name.split('.').pop() || 'mp4';
+    await addDoc(collection(db, 'videos'), {
+        createdAt: new Date().toISOString(),
+        format: `video/${finalExtension === 'mp4' ? 'mp4' : 'webm'}`,
+        requestId: requestId,
+        sizeBytes: file.size,
+        talentId: orderData.talentId || 'unknown',
+        url: url,
+        views: 0
+    });
+    
+    await updateDoc(orderRef, { 
+        videoUrl: url, 
+        history: [...history, newEvent],
+        updatedAt: new Date().toISOString()
+    });
+
+    return url;
+};
+
 

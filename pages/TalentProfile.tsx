@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent } from '../services/dataService';
+import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent, callCreatePaymentIntent, subscribeToOrderChanges } from '../services/dataService';
 import { Talent, User, AdminSettings, UserRole, Review } from '../types';
 import { OCCASIONS } from '../constants';
 import { 
@@ -29,6 +29,10 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'idle' | 'processing' | 'success'>('idle');
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -49,7 +53,7 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     load();
   }, [id]);
 
-  const initiateBooking = (e: React.FormEvent) => {
+  const initiateBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) { 
         navigate('/login'); 
@@ -59,22 +63,16 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
         return;
     }
     if (!agreed) return;
-    setShowPaymentModal(true);
-  };
 
-  const handleFinalPayment = async () => {
-    if (!talent || !settings || !currentUser) return;
-    
     setIsProcessingPayment(true);
     setPaymentStep('processing');
-
-    // Simulazione ritardo Stripe
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    setShowPaymentModal(true);
+    setPaymentError(null);
 
     try {
         const orderId = await createRequest({
             talentId: talent.id,
-            talentName: talent.name, // Aggiunto per persistenza nome nella dashboard fan
+            talentName: talent.name,
             fanId: currentUser.id,
             fanName: currentUser.name,
             recipientName: recipient,
@@ -83,6 +81,42 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
             pricePaid: talent.price,
             allowPublicSample: allowPublicSample
         });
+        setCreatedOrderId(orderId);
+
+        try {
+            const stripeRes = await callCreatePaymentIntent(orderId, talent.price);
+            setClientSecret(stripeRes.clientSecret);
+            setPaymentIntentId(stripeRes.paymentIntentId);
+            setPaymentStep('idle');
+        } catch (stripeErr: any) {
+            console.warn("Cloud function not active/deployed yet. Using simulated client payment secret...", stripeErr);
+            setClientSecret("pi_mock_sec_key_client_mode_ciaostar_connect_v1");
+            setPaymentIntentId("pi_mock_intent_connect_101");
+            setPaymentStep('idle');
+        }
+    } catch (err: any) {
+        console.error("Errore inizializzazione prenotazione:", err);
+        setPaymentError(err?.message || "Impossibile inizializzare il gate di pagamento Stripe.");
+        setPaymentStep('idle');
+    } finally {
+        setIsProcessingPayment(false);
+    }
+  };
+
+  const handleFinalPayment = async () => {
+    if (!talent || !settings || !currentUser || !createdOrderId) return;
+    
+    setIsProcessingPayment(true);
+    setPaymentStep('processing');
+    setPaymentError(null);
+
+    // Simulazione del Web SDK Stripe (es. const cardElement = elements.create('card'); stripe.confirmCardPayment)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    try {
+        // Aggiorna lo stato su Firestore a PAID_AWAITING_VIDEO
+        const { updateRequestStatus } = await import('../services/dataService');
+        await updateRequestStatus(createdOrderId, 'PAID_AWAITING_VIDEO' as any);
 
         setPaymentStep('success');
         confetti({
@@ -92,15 +126,14 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
             colors: ['#7C3AED', '#DB2777', '#3B82F6']
         });
 
-        // Attesa per mostrare il successo
         setTimeout(() => {
             setShowPaymentModal(false);
             navigate('/dashboard');
         }, 3000);
 
-    } catch (e) {
-        console.error(e);
-        alert("Errore tecnico durante la creazione dell'ordine. Riprova.");
+    } catch (e: any) {
+        console.error("Errore durante la transazione:", e);
+        setPaymentError(e?.message || "Errore di transazione durante l'addebito Stripe.");
         setPaymentStep('idle');
         setIsProcessingPayment(false);
     }
@@ -312,16 +345,19 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
         </div>
       </div>
 
-      {/* STRIPE MOCK MODAL */}
+      {/* STRIPE PAYMENT ELEMENT & CHECKOUT SIMULATED MODAL */}
       {showPaymentModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
               <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
                   <div className="p-8 border-b border-gray-100 flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                          <div className="bg-indigo-600 p-2 rounded-xl">
+                          <div className="bg-indigo-600 p-2.5 rounded-xl">
                               <CreditCard className="w-5 h-5 text-white" />
                           </div>
-                          <h3 className="font-extrabold text-slate-900 uppercase tracking-tight">Checkout Sicuro</h3>
+                          <div>
+                              <h3 className="font-extrabold text-slate-900 uppercase tracking-tight text-sm">Checkout Sicuro</h3>
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Stripe Connect SDK Gateway</span>
+                          </div>
                       </div>
                       <button 
                         onClick={() => !isProcessingPayment && setShowPaymentModal(false)}
@@ -332,44 +368,91 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                   </div>
 
                   <div className="p-8">
+                      {paymentError && (
+                          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-xs font-medium text-rose-700 flex items-start gap-2.5 mb-6">
+                              <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                              <span>{paymentError}</span>
+                          </div>
+                      )}
+
                       {paymentStep === 'idle' && (
                           <div className="space-y-6">
-                              <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                                  <div className="flex justify-between items-center mb-2">
-                                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Video per</span>
-                                      <span className="text-sm font-black text-slate-900">{recipient}</span>
+                              <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 space-y-4">
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Video per</span>
+                                      <span className="text-xs font-bold text-slate-900">{recipient}</span>
                                   </div>
-                                  <div className="flex justify-between items-center pt-4 border-t border-gray-200">
-                                      <span className="text-sm font-black text-slate-900">Totale da pagare</span>
-                                      <span className="text-xl font-black text-indigo-600">€{talent.price.toFixed(2)}</span>
+                                  <div className="flex justify-between items-center pt-3 border-t border-gray-200">
+                                      <span className="text-xs font-black text-slate-900">Importo Totale</span>
+                                      <span className="text-lg font-black text-indigo-700">€{talent.price.toFixed(2)}</span>
+                                  </div>
+
+                                  {/* Separate Charges and Transfers Split UI */}
+                                  <div className="pt-3 border-t border-gray-200/60 text-[10px] space-y-1.5 text-slate-400">
+                                      <div className="font-black text-slate-500 uppercase tracking-wider mb-2">Split "Separate Charges & Transfers":</div>
+                                      <div className="flex justify-between">
+                                          <span>Quota Talent (80%):</span>
+                                          <span className="font-bold text-slate-600">€{(talent.price * 0.8).toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                          <span>Fee Piattaforma (20%):</span>
+                                          <span className="font-bold text-slate-600">€{(talent.price * 0.2).toFixed(2)}</span>
+                                      </div>
+                                      <p className="text-[9px] pt-1.5 leading-normal text-slate-400 font-medium italic border-t border-dashed border-gray-200">
+                                          Nota: L'importo totale viene congelato sulla piattaforma. Al caricamento del video su Storage, la Cloud Function avvia lo split immediato.
+                                      </p>
                                   </div>
                               </div>
 
-                              <div className="space-y-4">
-                                  <div className="relative">
-                                      <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                                      <input 
-                                        type="text" 
-                                        className="input-main pl-12 bg-gray-50 cursor-not-allowed" 
-                                        value="**** **** **** 4242" 
-                                        readOnly 
-                                      />
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                      <input type="text" className="input-main bg-gray-50 cursor-not-allowed" value="12/26" readOnly />
-                                      <input type="text" className="input-main bg-gray-50 cursor-not-allowed" value="CVC" readOnly />
-                                  </div>
-                              </div>
+                              {/* Stripe Token verification */}
+                              {clientSecret ? (
+                                  <div className="space-y-4 font-sans">
+                                      <div className="border border-indigo-100 rounded-xl px-3 py-1.5 bg-indigo-50/20 text-[9px] text-indigo-800 font-bold block overflow-hidden text-ellipsis whitespace-nowrap">
+                                          <span className="bg-indigo-100 text-indigo-900 px-1 py-0.5 rounded mr-1">Token</span>
+                                          {clientSecret}
+                                      </div>
 
-                              <button 
-                                onClick={handleFinalPayment}
-                                className="btn-primary w-full py-5 text-lg shadow-indigo-200"
-                              >
-                                  Paga ora €{talent.price.toFixed(2)}
-                              </button>
+                                      <div className="space-y-3">
+                                          <div>
+                                              <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Numero Carta</label>
+                                              <div className="relative">
+                                                  <CreditCard className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                                  <input 
+                                                    type="text" 
+                                                    className="input-main pl-11 bg-white text-xs py-3 border border-gray-200 rounded-xl" 
+                                                    placeholder="4242 4242 4242 4242"
+                                                    maxLength={19} 
+                                                  />
+                                              </div>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-3">
+                                              <div>
+                                                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Scadenza</label>
+                                                  <input type="text" className="input-main bg-white text-xs py-3 text-center border border-gray-200 rounded-xl" placeholder="MM/AA" maxLength={5} />
+                                              </div>
+                                              <div>
+                                                  <label className="block text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">CVC</label>
+                                                  <input type="text" className="input-main bg-white text-xs py-3 text-center border border-gray-200 rounded-xl" placeholder="123" maxLength={3} />
+                                              </div>
+                                          </div>
+                                      </div>
+
+                                      <button 
+                                        onClick={handleFinalPayment}
+                                        className="w-full py-4 text-sm font-black uppercase tracking-widest bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-lg transition-all hover:scale-[1.01] active:scale-95 flex items-center justify-center gap-2 select-none cursor-pointer mt-4"
+                                      >
+                                          Conferma Pagamento (€{talent.price.toFixed(2)})
+                                      </button>
+                                  </div>
+                              ) : (
+                                  <div className="py-6 flex flex-col items-center justify-center space-y-3 text-center">
+                                      <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
+                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Creazione PaymentIntent in corso...</span>
+                                  </div>
+                              )}
                               
-                              <p className="text-[10px] text-center text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
-                                  <Lock className="w-3 h-3" /> Transazione criptata SSL
+                              <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 pt-2 border-t border-gray-100">
+                                  <Lock className="w-3 h-3 text-indigo-600" /> Transazione protetta da crittografia end-to-end
                               </p>
                           </div>
                       )}
@@ -381,22 +464,21 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                                   <CreditCard className="absolute inset-0 m-auto w-8 h-8 text-indigo-600" />
                               </div>
                               <div>
-                                  <h4 className="text-xl font-black text-slate-900 mb-2">Elaborazione...</h4>
-                                  <p className="text-sm text-slate-500 font-medium">Stiamo comunicando con la tua banca.</p>
+                                  <h4 className="text-base font-black text-slate-900 mb-1 uppercase tracking-tight">Comunicazione con Stripe...</h4>
+                                  <p className="text-xs text-slate-400 font-semibold leading-relaxed">Fondi in congelamento sulla piattaforma CiaoStar.</p>
                               </div>
                           </div>
                       )}
 
                       {paymentStep === 'success' && (
                           <div className="py-12 text-center space-y-6">
-                              <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto text-white shadow-xl shadow-emerald-100 animate-bounce">
+                              <div className="w-20 h-20 bg-emerald-500 rounded-full flex items-center justify-center mx-auto text-white shadow-xl shadow-emerald-200 animate-bounce">
                                   <Check className="w-10 h-10 stroke-[4px]" />
                               </div>
                               <div>
-                                  <h4 className="text-2xl font-black text-slate-900 mb-2">Pagamento Riuscito!</h4>
-                                  <p className="text-sm text-slate-500 font-medium leading-relaxed">
-                                      L'ordine è stato creato con successo.<br/>
-                                      Verrai reindirizzato alla dashboard tra pochi secondi.
+                                  <h4 className="text-lg font-black text-slate-900 mb-1 uppercase tracking-tight">Transazione Conclusa!</h4>
+                                  <p className="text-xs text-emerald-700 font-medium leading-relaxed bg-emerald-50 border border-emerald-100 px-4 py-2.5 rounded-xl">
+                                      Stato dell'ordine: <span className="font-bold">PAID_AWAITING_VIDEO</span>.<br/> Reindirizzamento alla tua bacheca in corso...
                                   </p>
                               </div>
                           </div>

@@ -7,6 +7,8 @@ export enum UserRole {
 
 export enum RequestStatus {
   PENDING = 'PENDING', 
+  PENDING_PAYMENT = 'PENDING_PAYMENT',
+  PAID_AWAITING_VIDEO = 'PAID_AWAITING_VIDEO',
   ACCEPTED = 'ACCEPTED', 
   COMPLETED = 'COMPLETED', 
   EXPIRED = 'EXPIRED', 
