@@ -1264,6 +1264,27 @@ export const deleteWatermark = async () => {
     await updateDoc(doc(db, 'settings', 'global_config'), { watermarkUrl: null });
 };
 
+// --- BRANDING LOGO COMPONENT SERVICES ---
+export const uploadBrandingLogo = async (file: File, type: 'logo' | 'favicon' | 'emailLogo'): Promise<string> => {
+    const storageRef = ref(storage, `settings/branding_${type}_${Date.now()}`);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    const updateObj: Record<string, string> = {};
+    if (type === 'logo') updateObj.logoUrl = url;
+    if (type === 'favicon') updateObj.faviconUrl = url;
+    if (type === 'emailLogo') updateObj.emailLogoUrl = url;
+    await updateDoc(doc(db, 'settings', 'global_config'), updateObj);
+    return url;
+};
+
+export const deleteBrandingLogo = async (type: 'logo' | 'favicon' | 'emailLogo'): Promise<void> => {
+    const updateObj: Record<string, null> = {};
+    if (type === 'logo') updateObj.logoUrl = null;
+    if (type === 'favicon') updateObj.faviconUrl = null;
+    if (type === 'emailLogo') updateObj.emailLogoUrl = null;
+    await updateDoc(doc(db, 'settings', 'global_config'), updateObj);
+};
+
 // --- MODERAZIONE MEDIA ---
 
 export const updateVideoDeletedStatus = async (requestId: string, isDeleted: boolean, reason: string = '') => {

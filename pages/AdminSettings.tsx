@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { AdminSettings as SettingsType, EmailSettings } from '../types';
-import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings, seedDatabaseAndStructure } from '../services/dataService';
-import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard, Mail } from 'lucide-react';
+import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings, seedDatabaseAndStructure, uploadBrandingLogo, deleteBrandingLogo } from '../services/dataService';
+import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard, Mail, Sliders, Sparkles } from 'lucide-react';
 
 const WatermarkLivePreview: React.FC<{ settings: SettingsType | null }> = ({ settings }) => {
     const text = settings?.watermarkText || 'CiaoStar';
@@ -88,6 +88,55 @@ const AdminSettings: React.FC = () => {
     // Watermark State
     const [watermarkFile, setWatermarkFile] = useState<File | null>(null);
     const [watermarkPreview, setWatermarkPreview] = useState<string | null>(null);
+
+    // Branding logo states
+    const [logoUploading, setLogoUploading] = useState(false);
+    const [faviconUploading, setFaviconUploading] = useState(false);
+    const [emailLogoUploading, setEmailLogoUploading] = useState(false);
+
+    const handleBrandingUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'favicon' | 'emailLogo') => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (type === 'logo') setLogoUploading(true);
+        if (type === 'favicon') setFaviconUploading(true);
+        if (type === 'emailLogo') setEmailLogoUploading(true);
+
+        try {
+            const url = await uploadBrandingLogo(file, type);
+            setSettings(prev => prev ? {
+                ...prev,
+                ...(type === 'logo' && { logoUrl: url }),
+                ...(type === 'favicon' && { faviconUrl: url }),
+                ...(type === 'emailLogo' && { emailLogoUrl: url }),
+            } : null);
+            alert("File caricato e registrato con successo!");
+        } catch (err: any) {
+            console.error(err);
+            alert("Errore durante il caricamento: " + (err.message || err));
+        } finally {
+            if (type === 'logo') setLogoUploading(false);
+            if (type === 'favicon') setFaviconUploading(false);
+            if (type === 'emailLogo') setEmailLogoUploading(false);
+        }
+    };
+
+    const handleBrandingDelete = async (type: 'logo' | 'favicon' | 'emailLogo') => {
+        if (!confirm("Rimuovere questo logo? L'operazione non è reversibile.")) return;
+        try {
+            await deleteBrandingLogo(type);
+            setSettings(prev => prev ? {
+                ...prev,
+                ...(type === 'logo' && { logoUrl: undefined }),
+                ...(type === 'favicon' && { faviconUrl: undefined }),
+                ...(type === 'emailLogo' && { emailLogoUrl: undefined }),
+            } : null);
+            alert("Logo rimosso con successo!");
+        } catch (err: any) {
+            console.error(err);
+            alert("Errore durante la rimozione dello spezzone: " + (err.message || err));
+        }
+    };
 
     const handleSeedDatabase = async () => {
         if (!confirm("Avviare il seeding e l'inizializzazione del database? Questo assicurerà che tutte le collezioni necessari (users, orders, system_settings, ecc.) e i documenti di configurazione di default siano creati correttamente.")) return;
@@ -911,6 +960,173 @@ const AdminSettings: React.FC = () => {
                     <div className="pt-2">
                         <button disabled={emailSaving} className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl hover:shadow-purple-200 transition-all cursor-pointer">
                             {emailSaving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Impostazioni Email'}
+                        </button>
+                    </div>
+                </form>
+
+                {/* BRANDING & TRACKER CONFIGURATION */}
+                <form onSubmit={handleSave} className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm space-y-6">
+                    <h2 className="text-lg font-black text-slate-900 uppercase mb-2 flex items-center gap-2">
+                        <Sliders className="w-5 h-5 text-indigo-500" /> Branding & Tracker
+                    </h2>
+                    <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                        Personalizza l'aspetto visivo ed inserisci i codici di tracciamento marketing e analytics (no-code).
+                    </p>
+
+                    <div className="space-y-4">
+                        {/* 1. Logo Principale */}
+                        <div className="border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-2">
+                            <label className="block text-[10px] font-black text-slate-500 uppercase">Logo Principale (Navbar & Footer)</label>
+                            {settings?.logoUrl ? (
+                                <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-slate-100">
+                                    <img src={settings.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" referrerPolicy="no-referrer" />
+                                    <button type="button" onClick={() => handleBrandingDelete('logo')} className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer">
+                                        <Trash2 className="w-3.5 h-3.5" /> Rimuovi
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <label className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl cursor-pointer text-xs font-bold transition-all">
+                                        <Upload className="w-4 h-4" />
+                                        {logoUploading ? 'Caricamento...' : 'Carica LogoPrincipale'}
+                                        <input type="file" accept="image/*" className="hidden" onChange={e => handleBrandingUpload(e, 'logo')} disabled={logoUploading} />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 2. Favicon */}
+                        <div className="border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-2">
+                            <label className="block text-[10px] font-black text-slate-500 uppercase">Favicon (.ico o .png quadrato)</label>
+                            {settings?.faviconUrl ? (
+                                <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-slate-100">
+                                    <img src={settings.faviconUrl} alt="Favicon" className="h-6 w-6 object-contain" referrerPolicy="no-referrer" />
+                                    <button type="button" onClick={() => handleBrandingDelete('favicon')} className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer">
+                                        <Trash2 className="w-3.5 h-3.5" /> Rimuovi
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <label className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl cursor-pointer text-xs font-bold transition-all">
+                                        <Upload className="w-4 h-4" />
+                                        {faviconUploading ? 'Caricamento...' : 'Carica Favicon'}
+                                        <input type="file" accept="image/*" className="hidden" onChange={e => handleBrandingUpload(e, 'favicon')} disabled={faviconUploading} />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 3. Logo Email */}
+                        <div className="border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-2">
+                            <label className="block text-[10px] font-black text-slate-500 uppercase">Logo per Email Template</label>
+                            {settings?.emailLogoUrl ? (
+                                <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-slate-100">
+                                    <img src={settings.emailLogoUrl} alt="Email Logo" className="h-8 max-w-[120px] object-contain" referrerPolicy="no-referrer" />
+                                    <button type="button" onClick={() => handleBrandingDelete('emailLogo')} className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer">
+                                        <Trash2 className="w-3.5 h-3.5" /> Rimuovi
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <label className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl cursor-pointer text-xs font-bold transition-all">
+                                        <Upload className="w-4 h-4" />
+                                        {emailLogoUploading ? 'Caricamento...' : 'Carica Logo Email'}
+                                        <input type="file" accept="image/*" className="hidden" onChange={e => handleBrandingUpload(e, 'emailLogo')} disabled={emailLogoUploading} />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Trackers */}
+                        <div className="pt-2 border-t border-slate-100 space-y-3">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Google Analytics Measurement ID</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="es. G-XXXXXX"
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={settings?.googleAnalyticsId ?? ''}
+                                    onChange={e => setSettings({...settings!, googleAnalyticsId: e.target.value})}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Facebook Pixel ID</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="es. 1234567890"
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={settings?.facebookPixelId ?? ''}
+                                    onChange={e => setSettings({...settings!, facebookPixelId: e.target.value})}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <button disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl transition-all cursor-pointer">
+                            {saving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Branding & Trackers'}
+                        </button>
+                    </div>
+                </form>
+
+                {/* SEO AVANZATO & USER-FRIENDLY */}
+                <form onSubmit={handleSave} className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm space-y-6">
+                    <h2 className="text-lg font-black text-slate-900 uppercase mb-2 flex items-center gap-2">
+                        <Globe className="w-5 h-5 text-emerald-500" /> Ottimizzazione SEO & Social
+                    </h2>
+                    <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                        Gestisci titoli, descrizioni e l'indicizzazione automatica dei motori di ricerca per massimizzare la visibilità biologica di CiaoStar.
+                    </p>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Titolo Primario del Sito (seoDefaultTitle)</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={settings?.seoDefaultTitle ?? ''}
+                                onChange={e => setSettings({...settings!, seoDefaultTitle: e.target.value})}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Meta Descrizione Globale (seoDefaultDescription)</label>
+                            <textarea 
+                                rows={3}
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={settings?.seoDefaultDescription ?? ''}
+                                onChange={e => setSettings({...settings!, seoDefaultDescription: e.target.value})}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Social Preview Image URL (Open Graph / seoOgImage)</label>
+                            <input 
+                                type="text" 
+                                placeholder="https://firebasestorage.googleapis.com/..."
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={settings?.seoOgImage ?? ''}
+                                onChange={e => setSettings({...settings!, seoOgImage: e.target.value})}
+                            />
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between bg-emerald-50/20 p-4 rounded-xl border border-emerald-100/50">
+                            <div>
+                                <label className="block text-[11px] font-black text-slate-800 uppercase">Indicizza Pagine Star</label>
+                                <p className="text-[10px] text-slate-400 leading-normal max-w-xs font-medium">Permetti o blocca l'indicizzazione robotica automatica sui motori di ricerca per i singoli profili dei VIP.</p>
+                            </div>
+                            <input 
+                                type="checkbox" 
+                                className="h-5 w-5 pointer-events-auto border-slate-300 accent-emerald-500 cursor-pointer text-emerald-500 focus:ring-0 rounded"
+                                checked={settings?.seoIndexTalents !== false}
+                                onChange={e => setSettings({...settings!, seoIndexTalents: e.target.checked})}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <button disabled={saving} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl transition-all cursor-pointer">
+                            {saving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Impostazioni SEO'}
                         </button>
                     </div>
                 </form>

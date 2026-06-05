@@ -20,6 +20,9 @@ const app = initializeApp(firebaseConfig);
 // Initialize Services
 export const auth = firebaseAuth.getAuth(app);
 export const googleProvider = new firebaseAuth.GoogleAuthProvider();
+export const facebookProvider = new firebaseAuth.FacebookAuthProvider();
+export const microsoftProvider = new firebaseAuth.OAuthProvider('microsoft.com');
+microsoftProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Initialize Firestore with experimentalForceLongPolling and persistent offline local cache to fix WebSocket / connection blockings in secure sandbox iframe environments
 export const db = initializeFirestore(app, {

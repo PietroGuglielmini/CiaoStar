@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent, callCreatePaymentIntent, subscribeToOrderChanges } from '../services/dataService';
+import { applyTalentSEO } from '../services/seoService';
 import { Talent, User, AdminSettings, UserRole, Review } from '../types';
 import { OCCASIONS } from '../constants';
 import { 
@@ -51,6 +52,9 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
         setReviews(rList);
         setPublicSamples(sList);
         setLoading(false);
+        if (t) {
+          applyTalentSEO(t.name, t.category);
+        }
       }
     };
     load();

@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, UserRole, InAppNotification } from '../types';
+import { User, UserRole, InAppNotification, AdminSettings } from '../types';
 import { Star, LogOut, Settings, MessageCircle, CreditCard, Users, Menu, Video, X, Film, Bell, Check, MessageSquare } from 'lucide-react';
-import { listenNotifications, markNotificationRead, markAllNotificationsRead } from '../services/dataService';
+import { listenNotifications, markNotificationRead, markAllNotificationsRead, getAdminSettings } from '../services/dataService';
 
 interface NavbarProps {
   user: User | null;
@@ -15,6 +15,11 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [settings, setSettings] = useState<AdminSettings | null>(null);
+
+  useEffect(() => {
+    getAdminSettings().then(setSettings).catch(e => console.warn("Could not load Navbar branding config", e));
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -37,10 +42,16 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
             navigate('/');
             setIsOpen(false);
           }}>
-            <div className="bg-indigo-600 p-1.5 rounded-xl mr-2.5">
-              <Star className="w-5 h-5 text-white fill-current" />
-            </div>
-            <span className="text-xl font-extrabold text-slate-900 tracking-tight">CIAOSTAR</span>
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt="CiaoStar Logo" className="h-8 w-auto object-contain mr-2" referrerPolicy="no-referrer" />
+            ) : (
+              <>
+                <div className="bg-indigo-600 p-1.5 rounded-xl mr-2.5">
+                  <Star className="w-5 h-5 text-white fill-current" />
+                </div>
+                <span className="text-xl font-extrabold text-slate-900 tracking-tight">CIAOSTAR</span>
+              </>
+            )}
           </div>
           
           <div className="flex items-center gap-1.5 md:gap-3">

@@ -4,6 +4,56 @@ import { getAdminSettings } from '../services/dataService';
 import { AdminSettings } from '../types';
 import { DEFAULT_ADMIN_SETTINGS } from '../constants';
 
+const initializeTrackers = (consents: { analytics: boolean; marketing: boolean }, settings: AdminSettings | null) => {
+  if (!settings) return;
+
+  // 1. Google Analytics Interaction Tracker
+  if (consents.analytics && settings.googleAnalyticsId?.trim()) {
+    const gaId = settings.googleAnalyticsId.trim();
+    if (!document.getElementById('google-analytics-script')) {
+      const scriptSrc = document.createElement('script');
+      scriptSrc.async = true;
+      scriptSrc.id = 'google-analytics-script-src';
+      scriptSrc.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
+      document.head.appendChild(scriptSrc);
+
+      const scriptInline = document.createElement('script');
+      scriptInline.id = 'google-analytics-script';
+      scriptInline.innerHTML = `
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '${gaId}');
+      `;
+      document.head.appendChild(scriptInline);
+      console.log(`[Tracker Tracker] Initialized Google Analytics Measurement ID: ${gaId}`);
+    }
+  }
+
+  // 2. Facebook Pixel Integration Tracker
+  if (consents.marketing && settings.facebookPixelId?.trim()) {
+    const fId = settings.facebookPixelId.trim();
+    if (!document.getElementById('facebook-pixel-script')) {
+      const scriptInline = document.createElement('script');
+      scriptInline.id = 'facebook-pixel-script';
+      scriptInline.innerHTML = `
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '${fId}');
+        fbq('track', 'PageView');
+      `;
+      document.head.appendChild(scriptInline);
+      console.log(`[Tracker Tracker] Initialized Facebook Pixel ID: ${fId}`);
+    }
+  }
+};
+
 const CookieBanner: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -18,13 +68,25 @@ const CookieBanner: React.FC = () => {
 
   useEffect(() => {
     const accepted = localStorage.getItem('ciaostar_cookies_accepted');
-    if (!accepted) {
+    let consentsVal = { technical: true, analytics: false, marketing: false };
+    
+    if (accepted) {
+      try {
+        consentsVal = JSON.parse(accepted);
+        setConsents(consentsVal);
+      } catch (e) {
+        console.error("Error parsing cookies preferences:", e);
+      }
+    } else {
       setIsVisible(true);
     }
     
     getAdminSettings()
       .then((res) => {
         setSettings(res);
+        if (accepted) {
+          initializeTrackers(consentsVal, res);
+        }
       })
       .catch((err) => {
         console.warn('Could not load dynamic settings for CookieBanner', err);
@@ -35,7 +97,9 @@ const CookieBanner: React.FC = () => {
     const preferences = { technical: true, analytics: true, marketing: true };
     localStorage.setItem('ciaostar_cookies_accepted', JSON.stringify(preferences));
     setIsVisible(false);
-    // Reload to apply scripts if necessary
+    if (settings) {
+      initializeTrackers(preferences, settings);
+    }
     window.dispatchEvent(new Event('cookies_updated'));
   };
 
@@ -47,8 +111,12 @@ const CookieBanner: React.FC = () => {
   };
 
   const handleSaveCustom = () => {
-    localStorage.setItem('ciaostar_cookies_accepted', JSON.stringify(consents));
+    const preferences = { technical: true, analytics: consents.analytics, marketing: consents.marketing };
+    localStorage.setItem('ciaostar_cookies_accepted', JSON.stringify(preferences));
     setIsVisible(false);
+    if (settings) {
+      initializeTrackers(preferences, settings);
+    }
     window.dispatchEvent(new Event('cookies_updated'));
   };
 

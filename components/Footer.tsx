@@ -42,10 +42,16 @@ const Footer: React.FC<FooterProps> = ({ user }) => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
           <div className="col-span-1 md:col-span-1">
             <div className="flex items-center mb-6">
-              <div className="bg-amber-500 p-1.5 rounded-xl mr-2.5">
-                <Star className="w-4 h-4 text-white fill-current" />
-              </div>
-              <span className="text-xl font-extrabold text-slate-900 tracking-tight">CIAOSTAR</span>
+              {settings?.logoUrl ? (
+                <img src={settings.logoUrl} alt="CiaoStar Logo" className="h-8 w-auto object-contain mr-2" referrerPolicy="no-referrer" />
+              ) : (
+                <>
+                  <div className="bg-amber-500 p-1.5 rounded-xl mr-2.5">
+                    <Star className="w-4 h-4 text-white fill-current" />
+                  </div>
+                  <span className="text-xl font-extrabold text-slate-900 tracking-tight">CIAOSTAR</span>
+                </>
+              )}
             </div>
             <p className="text-slate-500 text-sm font-medium leading-relaxed mb-6">
               La piattaforma italiana per video messaggi personalizzati dalle tue star preferite. Regala un'emozione unica.

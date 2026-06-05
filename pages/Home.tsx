@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { getTalents, getCategories } from '../services/dataService';
+import { applyDefaultSEO } from '../services/seoService';
 import TalentCard from '../components/TalentCard';
 import { Search, Loader2, Play } from 'lucide-react';
 import { Talent } from '../types';
@@ -16,6 +17,9 @@ const Home: React.FC = () => {
   const [absoluteMinPrice, setAbsoluteMinPrice] = useState<number>(0);
 
   useEffect(() => {
+    // Applica SEO globale all'avvio della homepage
+    applyDefaultSEO();
+
     const fetchData = async () => {
       setLoading(true);
       const [talentsData, catsData] = await Promise.all([getTalents(), getCategories()]);

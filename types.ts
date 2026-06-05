@@ -77,6 +77,15 @@ export interface AdminSettings {
   legalReaNumber?: string;
   legalContactEmail?: string;
   legalPecEmail?: string;
+  googleAnalyticsId?: string;
+  facebookPixelId?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  emailLogoUrl?: string;
+  seoDefaultTitle?: string;
+  seoDefaultDescription?: string;
+  seoOgImage?: string;
+  seoIndexTalents?: boolean;
 }
 
 export interface User {
@@ -220,5 +229,23 @@ export interface EmailSettings {
   apiKey?: string;
   updatedAt?: string;
 }
+
+// === MULTI-PROVIDER PAYMENT INTERFACES ===
+export type PaymentProviderType = 'STRIPE' | 'PAYPAL';
+
+export interface PaymentInitData {
+  orderId: string;
+  amount: number;
+  currency: string;
+  talentId: string;
+}
+
+export interface PaymentResponse {
+  success: boolean;
+  transactionId?: string;
+  redirectUrl?: string; // Utile per PayPal o 3D Secure di Stripe
+  error?: string;
+}
+
 
 

@@ -42,7 +42,16 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
   legalCapitalValue: '€100.000,00 i.v.',
   legalReaNumber: 'MI-9876543',
   legalContactEmail: 'info@ciaostar.it',
-  legalPecEmail: 'legal@pec.ciaostar.it'
+  legalPecEmail: 'legal@pec.ciaostar.it',
+  googleAnalyticsId: '',
+  facebookPixelId: '',
+  logoUrl: '',
+  faviconUrl: '',
+  emailLogoUrl: '',
+  seoDefaultTitle: 'CiaoStar - Videomessaggi personalizzati dalle tue star preferite',
+  seoDefaultDescription: 'Ordina video auguri e messaggi personalizzati dai tuoi influencer e talenti preferiti.',
+  seoOgImage: '',
+  seoIndexTalents: true
 };
 
 export const MOCK_TALENTS: Talent[] = [
