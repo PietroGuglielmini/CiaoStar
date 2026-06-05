@@ -82,7 +82,7 @@ const AdminReviews: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
                         <MessageSquare className="w-8 h-8 text-indigo-600" />
@@ -100,6 +100,20 @@ const AdminReviews: React.FC = () => {
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     Sincronizza
                 </button>
+            </div>
+
+            {/* AGCM Compliance Info Banner */}
+            <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 mb-8 flex items-start gap-3.5 text-left text-amber-900 text-xs leading-relaxed font-semibold">
+                <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                    <p className="uppercase tracking-wider font-extrabold text-[10px] text-amber-800">Direttiva Trasparenza Recensioni (Direttiva UE 2019/2161 Omnibus - AGCM Italia)</p>
+                    <p>
+                        In conformità con la normativa e le linee guida dell'Autorità Garante della Concorrenza e del Mercato (AGCM), questa piattaforma garantisce che <strong>tutte le recensioni provengono esclusivamente da utenti verificati</strong> che hanno completato con successo l'acquisto di un video-messaggio. 
+                    </p>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                        È vietata la fabbricazione artificiale di feedback o la modifica unilaterale del voto (rating). La moderazione dell'amministratore è strettamente delegata alla rimozione o occultamento esclusivo di recensioni contenenti dati personali sensibili, insulti, oscenità o violazioni flagranti dei termini di servizio.
+                    </p>
+                </div>
             </div>
 
             {/* Filter Controls */}

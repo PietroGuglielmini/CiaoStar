@@ -35,7 +35,14 @@ export const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
     disputeOpened: false,
     disputeResolved: false,
     orderCompleted: false
-  }
+  },
+  legalBusinessName: 'CIAOSTAR S.R.L. a socio unico',
+  legalRegisteredOffice: 'Via dell\'Innovazione 42, 20126 Milano (MI), Italia',
+  legalVatNumber: 'IT12345678901',
+  legalCapitalValue: '€100.000,00 i.v.',
+  legalReaNumber: 'MI-9876543',
+  legalContactEmail: 'info@ciaostar.it',
+  legalPecEmail: 'legal@pec.ciaostar.it'
 };
 
 export const MOCK_TALENTS: Talent[] = [

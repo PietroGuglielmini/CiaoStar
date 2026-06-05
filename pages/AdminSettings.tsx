@@ -289,8 +289,105 @@ const AdminSettings: React.FC = () => {
                     </div>
 
                     <div className="pt-4">
-                        <button disabled={saving} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl">
+                        <button disabled={saving} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl cursor-pointer hover:bg-black transition-all">
                             {saving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Parametri'}
+                        </button>
+                    </div>
+                </form>
+
+                {/* DATI SOCIETARI E FISCALI ITALIA */}
+                <form onSubmit={handleSave} className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm space-y-6">
+                    <h2 className="text-lg font-black text-slate-900 uppercase mb-4 flex items-center gap-2">
+                        <CreditCard className="w-5 h-5 text-amber-500" /> Adempimenti Legali & Fisco Italia
+                    </h2>
+                    <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                        I seguenti dati societari compariranno in modo chiaro e statico nel footer del sito in conformità con la normativa della Repubblica Italiana (pena sanzioni fino a 2.000€).
+                    </p>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Ragione Sociale</label>
+                        <input 
+                            type="text" 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 font-bold text-xs"
+                            placeholder="es. CIAOSTAR S.R.L. a socio unico"
+                            value={settings?.legalBusinessName ?? ''}
+                            onChange={e => setSettings({...settings!, legalBusinessName: e.target.value})}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Sede Legale Completa</label>
+                        <input 
+                            type="text" 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 font-bold text-xs"
+                            placeholder="es. Via dell'Innovazione 42, 20126 Milano (MI), Italia"
+                            value={settings?.legalRegisteredOffice ?? ''}
+                            onChange={e => setSettings({...settings!, legalRegisteredOffice: e.target.value})}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Partita IVA / C.F.</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 font-bold text-xs"
+                                placeholder="es. IT12345678901"
+                                value={settings?.legalVatNumber ?? ''}
+                                onChange={e => setSettings({...settings!, legalVatNumber: e.target.value})}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Capitale Sociale</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 font-bold text-xs"
+                                placeholder="es. €100.000,00 i.v."
+                                value={settings?.legalCapitalValue ?? ''}
+                                onChange={e => setSettings({...settings!, legalCapitalValue: e.target.value})}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Numero REA</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 font-bold text-xs"
+                                placeholder="es. MI-9876543"
+                                value={settings?.legalReaNumber ?? ''}
+                                onChange={e => setSettings({...settings!, legalReaNumber: e.target.value})}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Email PEC</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 font-bold text-xs"
+                                placeholder="es. legal@pec.ciaostar.it"
+                                value={settings?.legalPecEmail ?? ''}
+                                onChange={e => setSettings({...settings!, legalPecEmail: e.target.value})}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Email di Contatto Standard</label>
+                        <input 
+                            type="email" 
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 font-bold text-xs"
+                            placeholder="es. info@ciaostar.it"
+                            value={settings?.legalContactEmail ?? ''}
+                            onChange={e => setSettings({...settings!, legalContactEmail: e.target.value})}
+                        />
+                    </div>
+
+                    <div className="pt-4">
+                        <button disabled={saving} className="w-full bg-amber-500 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl cursor-pointer hover:bg-amber-600 transition-all">
+                            {saving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Dati Societari'}
                         </button>
                     </div>
                 </form>

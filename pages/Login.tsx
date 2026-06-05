@@ -11,7 +11,14 @@ const Login: React.FC = () => {
   const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [gdprAccepted, setGdprAccepted] = useState(false);
+
   const handleGoogleLogin = async () => {
+    if (!termsAccepted || !gdprAccepted) {
+      setErrorMsg("È obbligatorio accettare i Termini di Servizio e il consenso GDPR per procedere ed iscriversi alla piattaforma.");
+      return;
+    }
     setErrorMsg(null);
     setIsUnauthorizedDomain(false);
     try {
@@ -50,13 +57,47 @@ const Login: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-sm border border-gray-100 space-y-6">
+                {/* Checkbox di Consenso Obbligatorio */}
+                <div className="space-y-4 text-left bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={termsAccepted}
+                            onChange={(e) => setTermsAccepted(e.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span className="text-xs text-slate-500 font-semibold leading-relaxed">
+                            Accetto i <strong className="text-slate-800">Termini e Condizioni</strong> e dichiaro di aver visionato l’<strong className="text-slate-800">Informativa Privacy</strong> della piattaforma CiaoStar.
+                        </span>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={gdprAccepted}
+                            onChange={(e) => setGdprAccepted(e.target.checked)}
+                            className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span className="text-xs text-slate-500 font-semibold leading-relaxed">
+                            Consento al <strong className="text-slate-800">trattamento dei miei dati personali</strong> (incluso email e foto profilo fornite da Google) in conformità con il Regolamento Europeo n. 2016/679 (<strong className="text-slate-800">GDPR</strong>).
+                        </span>
+                    </label>
+                </div>
+
                 <button
                     onClick={handleGoogleLogin}
-                    className="w-full flex items-center justify-center gap-4 py-4 px-6 bg-white border-2 border-gray-100 rounded-2xl font-bold text-slate-700 hover:bg-gray-50 hover:border-indigo-100 transition-all group cursor-pointer"
+                    disabled={!termsAccepted || !gdprAccepted}
+                    className={`w-full flex items-center justify-center gap-4 py-4 px-6 border-2 rounded-2xl font-bold transition-all group ${
+                        termsAccepted && gdprAccepted 
+                        ? 'bg-white border-gray-100 text-slate-700 hover:bg-gray-50 hover:border-indigo-100 cursor-pointer' 
+                        : 'bg-gray-50 border-gray-100 text-slate-400 opacity-60 cursor-not-allowed'
+                    }`}
                 >
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
                     Continua con Google
-                    <ArrowRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                    {termsAccepted && gdprAccepted && (
+                        <ArrowRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                    )}
                 </button>
 
                 {errorMsg && (

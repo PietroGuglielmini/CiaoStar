@@ -56,11 +56,13 @@ const Terms: React.FC = () => {
                 <li>Pre-Autorizzazione: L'importo viene "congelato" (pre-autorizzato) sulla carta del Fan. L'addebito definitivo avviene solo al momento della consegna del Video ("Capture").</li>
               </ul>
 
-              <h3 className="font-bold text-slate-900 mt-6 mb-2">3.2 Diritto di Recesso e Rimborsi</h3>
+              <h3 className="font-bold text-slate-900 mt-6 mb-2">3.2 Esclusione del Diritto di Recesso (Rinuncia Esplicita)</h3>
+              <p className="mb-4">Si attira l'attenzione del Consumatore sui seguenti aspetti legati alla natura altamente personalizzata del servizio, disciplinato dal d.lgs. n. 206/2005 (Codice del Consumo):</p>
               <ul className="list-disc pl-5 space-y-2">
-                <li><strong>Annullamento:</strong> Il Fan può annullare la richiesta gratuitamente finché lo stato dell'ordine è "In Attesa" (Pending).</li>
-                <li><strong>Esclusione del Recesso:</strong> Una volta che il VIP accetta l'ordine (Stato: "In Lavorazione"), il Fan rinuncia espressamente al diritto di recesso (art. 59 Codice del Consumo), trattandosi di fornitura di beni confezionati su misura o chiaramente personalizzati.</li>
-                <li><strong>Rimborso Automatico:</strong> Se il VIP non consegna il video entro i termini previsti (vedi art. 5), l'ordine scade e i fondi vengono sbloccati/rimborsati integralmente al Fan.</li>
+                <li><strong>Annullamento preventivo:</strong> Il Fan può richiedere l'annullamento della richiesta di video-messaggio gratuitamente e autonomamente finché lo stato dell'ordine è "In Attesa" (Pending).</li>
+                <li><strong>Inizio dell'esecuzione:</strong> Non appena il VIP accetta formalmente l'ordine spostandone lo stato in "In Lavorazione", il processo creativo on-demand ha inizio immediato.</li>
+                <li><strong>Deroga ed Esclusione del Recesso:</strong> Ai sensi dell'<strong>art. 59, lett. a) e lett. o) del d.lgs. 206/2005 (Codice del Consumo)</strong>, l'acquisto di video-messaggi personalizzati costituisce fornitura di contenuto digitale non fornito su supporto materiale, oltre che fornitura di beni confezionati su misura o chiaramente personalizzati. Pertanto, procedendo all'acquisto ed accettando l'ordine, il Fan riscontra, acconsente e concede espressamente l'<strong>esecuzione immediata</strong> del servizio, accettando la contestuale ed espressa <strong>rinuncia e perdita del diritto di recesso</strong> legale di 14 giorni.</li>
+                <li><strong>Rimborso di tutela automatico:</strong> Al fine di tutelare comunque il consumatore, qualora il VIP rifiuti l'ordine, o non lo consegni entro i termini perentori stabiliti (vedi art. 5), il contratto si reputerà automaticamente risolto. L'importo pre-autorizzato sulla carta del Fan verrà integralmente sbloccato ed accreditato nuovamente a favore del consumatore, escludendo ogni pretesa risarcitoria ulteriore.</li>
               </ul>
 
               <h3 className="font-bold text-slate-900 mt-6 mb-2">3.3 Obblighi del Fan</h3>
@@ -72,8 +74,14 @@ const Terms: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 uppercase mb-4">4. TERMINI E CONDIZIONI PER I VIP (VENDITORI)</h2>
-              <h3 className="font-bold text-slate-900 mb-2">4.1 Indipendenza e Responsabilità Fiscale</h3>
-              <p>Il VIP agisce in piena autonomia, senza vincoli di subordinazione con CiaoStar. Il VIP è l'unico responsabile per la dichiarazione dei propri compensi e il versamento delle relative imposte in base alla propria legislazione fiscale.</p>
+              <h3 className="font-bold text-slate-900 mb-2">4.1 Autonomia, Natura del Rapporto e Responsabilità Fiscale (Adempimenti Italiani)</h3>
+              <p>Il VIP (o "Talent") opera e agisce in qualità di professionista autonomo o prestatore occasionale indipendente, escludendo tassativamente qualsiasi rapporto di lavoro subordinato, para-subordinato, agenzia o associazione in partecipazione con CiaoStar.</p>
+              <p className="mt-2">In conformità con il regime tributario della Repubblica Italiana (Agenzia delle Entrate) e le direttive europee DAC7, si stabilisce quanto segue:</p>
+              <ul className="list-disc pl-5 space-y-2 mt-2 font-semibold">
+                <li><strong>Autonomia Fiscale:</strong> Il VIP è l'unico ed esclusivo responsabile per la corretta qualificazione del proprio reddito (es. prestazione di lavoro autonomo occasionale ex art. 67 lett. l del TUIR, o attività d'impresa/professionale con Partita IVA) e per l’adempimento di tutti i relativi obblighi dichiarativi e di versamento delle imposte (IRPEF, IVA, contributi previdenziali INPS, ecc.).</li>
+                <li><strong>Fatturazione e Ricevute:</strong> Poiché CiaoStar agisce esclusivamente come intermediario tecnico e mandatario all'incasso, la transazione economica per la vendita del Video-Messaggio avviene direttamente tra il Fan (acquirente) e il VIP (venditore). Il VIP si assume l’obbligo di emettere idonea documentazione fiscale (es. ricevuta generica con ritenuta d'acconto se applicabile, o fattura elettronica con applicazione di IVA o in regime di esonero come il regime forfettario) direttamente a favore del Fan, qualora richiesto.</li>
+                <li><strong>Fattura delle Commissioni (Autofatturazione / Connect Fee):</strong> CiaoStar emetterà regolarmente fattura elettronica nei confronti del VIP per la Commissione del Servizio (Platform Fee) trattenuta in automatico su ciascuna transazione riuscita. Il VIP autorizza CiaoStar e il gestore dei servizi finanziari (Stripe Connect) a trattenere tale commissione all'origine prima dell'erogazione dei fondi sul saldo disponibile.</li>
+              </ul>
 
               <h3 className="font-bold text-slate-900 mt-6 mb-2">4.2 Obbligo di Autenticità (NO AI / NO DELEGHE)</h3>
               <ul className="list-disc pl-5 space-y-2">

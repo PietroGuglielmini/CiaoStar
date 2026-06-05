@@ -70,6 +70,13 @@ export interface AdminSettings {
   stripeSecretKey?: string;
   stripePublishableKey?: string;
   stripeWebhookSecret?: string;
+  legalBusinessName?: string;
+  legalRegisteredOffice?: string;
+  legalVatNumber?: string;
+  legalCapitalValue?: string;
+  legalReaNumber?: string;
+  legalContactEmail?: string;
+  legalPecEmail?: string;
 }
 
 export interface User {
