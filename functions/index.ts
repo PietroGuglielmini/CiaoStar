@@ -345,6 +345,11 @@ export const completeOrderAndSplit = functions.firestore
 
         // A. Trigger when status changes to PAID_AWAITING_VIDEO (Order paid, notify Talent)
         if (newValue.status === 'PAID_AWAITING_VIDEO' && oldValue.status !== 'PAID_AWAITING_VIDEO') {
+            // Genera e invia fattura d'acquisto in modo asincrono (completamente non bloccante)
+            generateAndSendInvoice(orderId, newValue).catch(invoiceError => {
+                console.error(`[Invoice Generator Error] Failed to auto-generate and email invoice for order ${orderId}:`, invoiceError);
+            });
+
             const talentId = newValue.talentId;
             try {
                 const talentSnap = await db.collection('users').doc(talentId).get();
@@ -954,3 +959,252 @@ export const checkExpiredOrdersCron = functions.pubsub.schedule('every 24 hours'
     }
     return null;
 });
+
+/**
+ * 8. generateAndSendInvoice
+ * Helper to compute split fees, save a receipt/invoice document on Firestore, and email an elegant invoice document to the Fan.
+ */
+async function generateAndSendInvoice(orderId: string, orderData: any) {
+    try {
+        console.log(`[Invoice Generator] Generating invoice for orderId ${orderId}...`);
+        
+        // 1. Legge dati dell'admin per intestazione societaria
+        let bizName = 'CIAOSTAR S.R.L. a socio unico';
+        let office = "Via dell'Innovazione 42, 20126 Milano (MI), Italia";
+        let pIva = 'IT12345678901';
+        let capital = '€100.000,00 i.v.';
+        let rea = 'MI-9876543';
+        let emailContact = 'info@ciaostar.it';
+
+        const configSnap = await db.collection('settings').doc('global_config').get();
+        if (configSnap.exists) {
+            const data = configSnap.data();
+            bizName = data?.legalBusinessName || bizName;
+            office = data?.legalRegisteredOffice || office;
+            pIva = data?.legalVatNumber || pIva;
+            capital = data?.legalCapitalValue || capital;
+            rea = data?.legalReaNumber || rea;
+            emailContact = data?.legalContactEmail || emailContact;
+        }
+
+        // 2. Legge e-mail del fan
+        const fanId = orderData.fanId;
+        let fanEmail = '';
+        let fanName = orderData.fanName || 'Cliente CiaoStar';
+        if (fanId) {
+            const fanSnap = await db.collection('users').doc(fanId).get();
+            if (fanSnap.exists) {
+                const fanData = fanSnap.data();
+                fanEmail = fanData?.email || '';
+                fanName = fanData?.name || fanName;
+            }
+        }
+
+        if (!fanEmail) {
+            console.warn(`[Invoice Generator] No email found for fan ${fanId}, cannot send invoice email.`);
+            return;
+        }
+
+        // 3. Calcola importi
+        const totalPaid = orderData.pricePaid || 0;
+        const platformFeePercent = 20; // 20%
+        const marketplaceFee = Number((totalPaid * (platformFeePercent / 100)).toFixed(2));
+        const talentShare = Number((totalPaid - marketplaceFee).toFixed(2));
+
+        // Genera identificativo ricevuta univoco
+        const year = new Date().getFullYear();
+        const randomNum = Math.floor(10000 + Math.random() * 90000);
+        const invoiceNumber = `CS-INV-${year}-${randomNum}`;
+
+        // 4. Salva sul DB Firestore la fattura/ricevuta
+        const invoiceData = {
+            invoiceNumber,
+            orderId,
+            fanId,
+            fanName,
+            fanEmail,
+            totalPaid,
+            marketplaceFee,
+            talentShare,
+            platformFeePercent,
+            createdAt: new Date().toISOString(),
+            status: 'ISSUED',
+            issuer: {
+                bizName,
+                office,
+                pIva,
+                capital,
+                rea,
+                emailContact
+            }
+        };
+
+        await db.collection('invoices').doc(invoiceNumber).set(invoiceData);
+        console.log(`[Invoice Generator] Saving invoice receipt ${invoiceNumber} to Firestore.`);
+
+        // 5. Invia email con fattura/ricevuta HTML super elegante
+        const subject = `Ricevuta d'Acquisto #${invoiceNumber} - Ordine su CiaoStar`;
+        const textContent = `Grazie per il tuo acquisto! Ricevuta numero: ${invoiceNumber}. Importo totale: €${totalPaid.toFixed(2)}. Quota stella: €${talentShare.toFixed(2)}. Fee intermediazione marketplace: €${marketplaceFee.toFixed(2)}. Emessa da: ${bizName}.`;
+        
+        const htmlContent = `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #f1f5f9; border-radius: 24px; background-color: #ffffff; color: #1e293b;">
+            <div style="text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 24px;">
+              <h1 style="color: #7c3aed; margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.025em;">CIAOSTAR</h1>
+              <span style="font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 0.1em; display: block; margin-top: 4px;">Ricevuta d'Acquisto</span>
+              <p style="margin: 10px 0 0 0; color: #64748b; font-size: 11px; font-weight: 600;">RICEVUTA N. <strong>${invoiceNumber}</strong> &bull; Data: ${new Date().toLocaleDateString('it-IT')}</p>
+            </div>
+
+            <div style="margin-bottom: 24px; line-height: 1.5; font-size: 12px; color: #475569;">
+              <div style="width: 48%; float: left; margin-bottom: 20px;">
+                <p style="margin: 0 0 4px 0; font-weight: bold; text-transform: uppercase; color: #020617; font-size: 10px; letter-spacing: 0.05em;">Fornitore della Piattaforma</p>
+                <p style="margin: 0; font-weight: 800; color: #0f172a;">${bizName}</p>
+                <p style="margin: 2px 0 0 0;">Sede Legale: ${office}</p>
+                <p style="margin: 2px 0 0 0;">P. IVA: ${pIva}</p>
+                <p style="margin: 2px 0 0 0;">Cap. Soc.: ${capital}</p>
+                <p style="margin: 2px 0 0 0;">R.E.A.: ${rea}</p>
+              </div>
+              <div style="width: 48%; float: right; margin-bottom: 20px; text-align: right;">
+                <p style="margin: 0 0 4px 0; font-weight: bold; text-transform: uppercase; color: #020617; font-size: 10px; letter-spacing: 0.05em;">Intestatario dell'Ordine</p>
+                <p style="margin: 0; font-weight: 800; color: #0f172a;">${fanName}</p>
+                <p style="margin: 2px 0 0 0;">Email: ${fanEmail}</p>
+                <p style="margin: 2px 0 0 0;">ID Ordine: #${orderId.substring(0, 8).toUpperCase()}</p>
+              </div>
+              <div style="clear: both;"></div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 13px;">
+              <thead>
+                <tr style="border-bottom: 1px solid #e2e8f0; background-color: #fafafa; text-align: left;">
+                  <th style="padding: 10px; font-weight: bold; color: #0f172a;">Descrizione Servizio</th>
+                  <th style="padding: 10px; text-align: right; font-weight: bold; color: #0f172a;">Prezzo Lordo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                  <td style="padding: 12px 10px;">
+                    <strong>Commissione video-colloquio personalizzato on-demand</strong><br/>
+                    <span style="font-size: 11px; color: #64748b;">Realizzato dalla Star: <strong>${orderData.talentName || 'VIP CiaoStar'}</strong></span>
+                  </td>
+                  <td style="padding: 12px 10px; text-align: right; font-weight: bold;">€${totalPaid.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div style="background-color: #f5f3ff; border: 1px solid #e9d5ff; border-radius: 12px; padding: 15px; margin-bottom: 24px; font-size: 11px; color: #6b21a8; line-height: 1.5;">
+              <p style="margin: 0 0 5px 0; font-weight: bold; text-transform: uppercase; font-size: 9px; letter-spacing: 0.05em;">Dettaglio Split Transazione / Connect Fee</p>
+              <table style="width: 100%; font-size: 11px; border: none;">
+                <tr>
+                  <td>Quota di spettanza destinata all'Artista (80%):</td>
+                  <td style="text-align: right; font-weight: bold;">€${talentShare.toFixed(2)}</td>
+                </tr>
+                <tr>
+                  <td>Platform Fee / Costi di intermediazione CiaoStar (20%):</td>
+                  <td style="text-align: right; font-weight: bold;">€${marketplaceFee.toFixed(2)}</td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="border-top: 2px solid #f1f5f9; padding-top: 15px; margin-top: 15px; text-align: right;">
+              <span style="font-size: 12px; font-weight: bold; color: #64748b; text-transform: uppercase;">Totale Addebitato (3D Secure)</span>
+              <p style="margin: 5px 0 0 0; font-size: 24px; font-weight: 900; color: #020617;">€${totalPaid.toFixed(2)}</p>
+            </div>
+
+            <div style="border-top: 1px solid #f1f5f9; padding-top: 20px; margin-top: 24px; font-size: 10px; color: #94a3b8; line-height: 1.6; text-align: center;">
+              <p style="margin: 0; font-weight: bold;">INFORMAZIONI DI ESCLUSIONE FISCALE</p>
+              <p style="margin: 3px 0 0 0;">Operazione fuori campo IVA ai sensi dell'intermediazione tecnica. Il compenso netto viene girato in automatico tramite Stripe Connect all'Artista.</p>
+              <p style="margin: 3px 0 0 0;">Per qualsiasi chiarimento d'acquisto, contatta l'assistenza all'indirizzo <a href="mailto:${emailContact}" style="color: #7c3aed; text-decoration: none;">${emailContact}</a></p>
+            </div>
+          </div>
+        `;
+
+        await sendTransactionalEmail(fanEmail, subject, textContent, htmlContent);
+        console.log(`[Invoice Generator] Invoice ${invoiceNumber} successfully emailed to ${fanEmail}.`);
+    } catch (invoiceErr) {
+        console.error(`[Invoice Generator] Error generating or sending invoice for order ${orderId}:`, invoiceErr);
+    }
+}
+
+/**
+ * 9. sendRemindersCron
+ * Scheduled cloud function that checks for orders in PAID_AWAITING_VIDEO that have passed the 5th day since creation, and sends them an automated email alert.
+ */
+export const sendRemindersCron = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
+    const now = new Date();
+    console.log(`[Cron: Order Reminders] Started at ${now.toISOString()}`);
+    try {
+        const snapshot = await db.collection('orders')
+            .where('status', '==', 'PAID_AWAITING_VIDEO')
+            .get();
+            
+        if (snapshot.empty) {
+            console.log(`[Cron: Order Reminders] No orders in 'PAID_AWAITING_VIDEO'.`);
+            return null;
+        }
+
+        let sentReminders = 0;
+        for (const docSnap of snapshot.docs) {
+            const orderData = docSnap.data();
+            const orderId = docSnap.id;
+
+            // Se il sollecito è già stato inviato, saltiamo
+            if (orderData.reminderSent) {
+                continue;
+            }
+
+            const createdAt = new Date(orderData.createdAt || orderData.updatedAt);
+            const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000);
+
+            // Se creato più di 5 giorni fa
+            if (createdAt < fiveDaysAgo) {
+                console.log(`[Cron: Order Reminders] Order ${orderId} is over 5 days old. Sending reminder to Talent.`);
+
+                const talentId = orderData.talentId;
+                if (talentId) {
+                    const talentSnap = await db.collection('users').doc(talentId).get();
+                    if (talentSnap.exists) {
+                        const talentData = talentSnap.data();
+                        const talentEmail = talentData?.email;
+
+                        if (talentEmail) {
+                            const talentName = talentData?.name || 'Star';
+                            const fanName = orderData.fanName || 'un fan';
+                            const subject = `Sollecito: Ti rimangono 2 giorni per registrare il video per ${fanName}!`;
+                            const textContent = `Ciao ${talentName}, ti ricordiamo che hai tempo fino a 7 giorni per caricare il videomessaggio richiesto da ${fanName}. Mancano solo 2 giorni! Scaduto questo termine, l'ordine verrà rimborsato automaticamente.`;
+                            const htmlContent = `
+                              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #fbd23e; border-radius: 16px; background-color: #ffffff; color: #334155;">
+                                <h1 style="color: #ea580c; font-size: 24px; font-weight: 850; margin-top: 0;">⏳ CiaoStar - Sollecito Video</h1>
+                                <p>Ciao <strong>${talentName}</strong>,</p>
+                                <p>Ti ricordiamo che l'ordine richiesto da <strong>${fanName}</strong> scadrà tra sole <strong>48 ore (2 giorni)</strong>.</p>
+                                <p style="margin-top: 10px;">Se non carichi il video in tempo, la transazione verrà stornata e il fan riceverà un rimborso automatico dell'intero importo.</p>
+                                <div style="background-color: #fffbeb; border-left: 4px solid #ea580c; padding: 15px; margin: 20px 0; border-radius: 8px;">
+                                  <p style="margin: 0;"><strong>Istruzioni del fan:</strong> "${orderData.instructions || 'Nessuna istruzione particolare.'}"</p>
+                                </div>
+                                <p>Accedi subito alla tua bacheca per completare la registrazione e incassare il compenso!</p>
+                                <div style="text-align: center; margin: 25px 0;">
+                                  <a href="https://ciaostar.it/dashboard" style="background-color: #ea580c; color: #ffffff; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.3);">Registra Ora</a>
+                                </div>
+                                <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;">
+                                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Team CiaoStar</p>
+                              </div>
+                            `;
+
+                            await sendTransactionalEmail(talentEmail, subject, textContent, htmlContent);
+                            
+                            // Segna come inviato
+                            await db.collection('orders').doc(orderId).update({
+                                reminderSent: true
+                            });
+
+                            sentReminders++;
+                        }
+                    }
+                }
+            }
+        }
+        console.log(`[Cron: Order Reminders] Completed. Reminders sent: ${sentReminders}`);
+    } catch (err) {
+        console.error('[Cron: Order Reminders] Error:', err);
+    }
+    return null;
+});
+

@@ -1730,4 +1730,48 @@ export const uploadVideoOnlyResumable = async (
     return url;
 };
 
+// -- SEEDING AND STRUCTURE INITIALIZATION FLOW --
+export const seedDatabaseAndStructure = async (): Promise<boolean> => {
+    try {
+        // 1. Inizializza settings/global_config se non esiste
+        const settingsRef = doc(db, 'settings', 'global_config');
+        const settingsSnap = await getDoc(settingsRef);
+        if (!settingsSnap.exists()) {
+            await setDoc(settingsRef, { ...DEFAULT_ADMIN_SETTINGS });
+        } else {
+            // Unisci i campi mancanti
+            await setDoc(settingsRef, { ...DEFAULT_ADMIN_SETTINGS, ...settingsSnap.data() }, { merge: true });
+        }
+
+        // 2. Inizializza system_settings/payment_and_email se non esiste
+        const emailRef = doc(db, 'system_settings', 'payment_and_email');
+        const emailSnap = await getDoc(emailRef);
+        if (!emailSnap.exists()) {
+            await setDoc(emailRef, {
+                senderEmail: 'info@ciaostar.it',
+                senderName: 'Team CiaoStar',
+                smtpHost: '',
+                smtpUser: '',
+                smtpPass: '',
+                smtpPort: 587,
+                apiKey: '',
+                updatedAt: new Date().toISOString()
+            });
+        }
+
+        // 3. Inizializza categorie se mancano
+        const catRef = doc(db, 'settings', 'talent_categories');
+        const catSnap = await getDoc(catRef);
+        if (!catSnap.exists()) {
+            await setDoc(catRef, { categories: DB_CATEGORIES_SEED || ['Attori', 'Musicisti', 'Influencer', 'Sportivi', 'Comici', 'Chef', 'Doppiatori'] });
+        }
+
+        console.log("Database initialized and configured with robust schema settings successfully.");
+        return true;
+    } catch (err) {
+        console.error("Errore durante il seeding della struttura del database: ", err);
+        throw err;
+    }
+};
+
 

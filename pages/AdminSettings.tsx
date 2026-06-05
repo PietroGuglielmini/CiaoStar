@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AdminSettings as SettingsType, EmailSettings } from '../types';
-import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings } from '../services/dataService';
+import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings, seedDatabaseAndStructure } from '../services/dataService';
 import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard, Mail } from 'lucide-react';
 
 const WatermarkLivePreview: React.FC<{ settings: SettingsType | null }> = ({ settings }) => {
@@ -77,6 +77,7 @@ const AdminSettings: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [emailSaving, setEmailSaving] = useState(false);
+    const [seeding, setSeeding] = useState(false);
 
     // SMTP fields
     const [smtpHost, setSmtpHost] = useState('');
@@ -87,6 +88,21 @@ const AdminSettings: React.FC = () => {
     // Watermark State
     const [watermarkFile, setWatermarkFile] = useState<File | null>(null);
     const [watermarkPreview, setWatermarkPreview] = useState<string | null>(null);
+
+    const handleSeedDatabase = async () => {
+        if (!confirm("Avviare il seeding e l'inizializzazione del database? Questo assicurerà che tutte le collezioni necessari (users, orders, system_settings, ecc.) e i documenti di configurazione di default siano creati correttamente.")) return;
+        setSeeding(true);
+        try {
+            await seedDatabaseAndStructure();
+            alert("Database CiaoStar inizializzato con successo! Tutte le collezioni e i parametri di base sono pronti.");
+            await load(); // ricarica i dati
+        } catch (err: any) {
+            console.error(err);
+            alert("Errore durante l'inizializzazione del database: " + (err.message || err));
+        } finally {
+            setSeeding(false);
+        }
+    };
 
     const load = async () => {
         setLoading(true);
@@ -893,11 +909,42 @@ const AdminSettings: React.FC = () => {
                     </div>
 
                     <div className="pt-2">
-                        <button disabled={emailSaving} className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl hover:shadow-purple-200 transition-all">
+                        <button disabled={emailSaving} className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl hover:shadow-purple-200 transition-all cursor-pointer">
                             {emailSaving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Impostazioni Email'}
                         </button>
                     </div>
                 </form>
+            </div>
+
+            {/* SEEDING AND DATABASE INITIALIZATION CARD */}
+            <div className="mt-8 bg-white border border-slate-100 rounded-[32px] p-8 shadow-sm">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div className="space-y-2 text-left">
+                        <h3 className="text-lg font-black text-slate-900 uppercase flex items-center gap-2">
+                            <Database className="w-5 h-5 text-emerald-500" /> Inizializzazione Database & Seeding
+                        </h3>
+                        <p className="text-xs text-slate-400 font-semibold leading-relaxed max-w-xl">
+                            Se l'applicazione è stata appena installata o si trova in uno stato vergine, clicca sul pulsante sottostante per pre-generare e configurare i documenti e le collezioni Firestore necessarie (impostazioni di pagamento, e-mail, parametri di default, categorie VIP). Questa operazione è sicura e non sovrascrive dati personalizzati già esistenti.
+                        </p>
+                    </div>
+                    <button 
+                        onClick={handleSeedDatabase}
+                        disabled={seeding}
+                        className="w-full md:w-auto shrink-0 bg-emerald-500 hover:bg-emerald-600 text-white py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                        {seeding ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Inizializzazione in corso...
+                            </>
+                        ) : (
+                            <>
+                                <Database className="w-4 h-4" />
+                                Inizializza Sistema CiaoStar
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
     );

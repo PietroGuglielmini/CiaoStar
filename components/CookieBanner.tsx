@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, Cookie, Check, X, Settings2 } from 'lucide-react';
+import { getAdminSettings } from '../services/dataService';
+import { AdminSettings } from '../types';
+import { DEFAULT_ADMIN_SETTINGS } from '../constants';
 
 const CookieBanner: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [settings, setSettings] = useState<AdminSettings | null>(null);
 
   // Consensi granulari
   const [consents, setConsents] = useState({
@@ -17,6 +21,14 @@ const CookieBanner: React.FC = () => {
     if (!accepted) {
       setIsVisible(true);
     }
+    
+    getAdminSettings()
+      .then((res) => {
+        setSettings(res);
+      })
+      .catch((err) => {
+        console.warn('Could not load dynamic settings for CookieBanner', err);
+      });
   }, []);
 
   const handleAcceptAll = () => {
@@ -42,6 +54,8 @@ const CookieBanner: React.FC = () => {
 
   if (!isVisible) return null;
 
+  const bizName = settings?.legalBusinessName || DEFAULT_ADMIN_SETTINGS.legalBusinessName || 'CIAOSTAR S.R.L. a socio unico';
+
   return (
     <div className="fixed bottom-0 inset-x-0 z-[10000] p-4 sm:p-6 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 text-slate-100 flex items-center justify-center shadow-[0_-10px_30px_rgba(0,0,0,0.3)] animate-fade-in animate-duration-300">
       <div className="max-w-4xl w-full bg-slate-950 border border-slate-800 p-6 rounded-3xl space-y-4">
@@ -55,7 +69,7 @@ const CookieBanner: React.FC = () => {
                 Informativa sui Cookie & GDPR Compliance (Italia)
               </h3>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Su CiaoStar utilizziamo cookie tecnici essenziali (Firebase per l’autenticazione, Stripe per i pagamenti antifrode) e, previo tuo consenso, cookie di statistica e social per migliorare la tua esperienza. In conformità con le linee guida del Garante della Privacy del 10 giugno 2021, puoi prestare, rifiutare o personalizzare il tuo consenso in qualsiasi momento.
+                Su <strong>{bizName}</strong> utilizziamo cookie tecnici essenziali (Firebase per l’autenticazione, Stripe per i pagamenti antifrode) e, previo tuo consenso, cookie di statistica e social per migliorare la tua esperienza. In conformità con le linee guida del Garante della Privacy del 10 giugno 2021, puoi prestare, rifiutare o personalizzare il tuo consenso in qualsiasi momento.
               </p>
             </div>
           </div>
