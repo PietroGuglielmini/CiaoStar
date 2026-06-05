@@ -62,7 +62,7 @@ const TalentCard: React.FC<TalentCardProps> = ({ talent }) => {
         <div>
           <div className="flex items-center gap-1.5 mb-2">
               <h3 className="font-extrabold text-slate-900 text-lg truncate">{talent.name}</h3>
-              <div className="bg-blue-500 rounded-full p-0.5" title="Verificato">
+              <div className="bg-amber-500 rounded-full p-0.5" title="Verificato">
                   <Check className="w-3 h-3 text-white" />
               </div>
           </div>

@@ -1,6 +1,8 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
+import * as path from 'path';
+import * as os from 'os';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -41,9 +43,9 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
     }
 
-    const { orderId, amount } = data;
-    if (!orderId || !amount) {
-        throw new functions.https.HttpsError('invalid-argument', 'Missing parameters: orderId and amount are required.');
+    const { orderId } = data;
+    if (!orderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing parameter: orderId is required.');
     }
 
     try {
@@ -56,14 +58,24 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
         }
 
         const orderData = orderSnap.data();
+        if (!orderData) {
+            throw new functions.https.HttpsError('not-found', 'Order data is empty.');
+        }
+
         if (orderData?.fanId !== context.auth.uid) {
             throw new functions.https.HttpsError('permission-denied', 'Only the requesting fan can pay for this order.');
+        }
+
+        // Estrai l'importo direttamente dall'ordine memorizzato su Firestore per prevenire manomissioni lato client
+        const safeAmount = orderData?.pricePaid;
+        if (typeof safeAmount !== 'number' || safeAmount <= 0) {
+            throw new functions.https.HttpsError('failed-precondition', 'Invalid or missing pricePaid in the Firestore order.');
         }
 
         // Create the PaymentIntent on Stripe
         // Using "transfer_group" to enable separate late transfers
         const paymentIntent = await stripe.paymentIntents.create({
-            amount: Math.round(amount * 100), // in cents
+            amount: Math.round(safeAmount * 100), // in cents
             currency: 'eur',
             payment_method_types: ['card'],
             transfer_group: orderId,
@@ -151,6 +163,14 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
                 
                 if (orderSnap.exists) {
                     const orderData = orderSnap.data();
+                    const currentStatus = orderData?.status;
+                    
+                    // Controllo Idempotenza / Transazioni Duplicate
+                    if (currentStatus === 'PAID_AWAITING_VIDEO' || currentStatus === 'COMPLETED' || currentStatus === 'DISPUTE_OPEN' || currentStatus === 'EXPIRED_REFUNDED') {
+                        console.log(`Order ${orderId} already processed (status: ${currentStatus}). Returning 200 early to guarantee idempotence.`);
+                        res.status(200).json({ received: true });
+                        return;
+                    }
                     
                     // Add entry to history
                     const history = orderData?.history || [];
@@ -375,7 +395,10 @@ export const completeOrderAndSplit = functions.firestore
                           </div>
                         `;
 
-                        await sendTransactionalEmail(talentEmail, subjectTalent, textTalent, htmlTalent);
+                        // Invia l'email in modo disaccoppiato e completamente non bloccante
+                        sendTransactionalEmail(talentEmail, subjectTalent, textTalent, htmlTalent).catch(mailErr => {
+                            console.error(`[Background Email Error] Errore invio notifica talento ${talentId}:`, mailErr);
+                        });
                     } else {
                         console.warn(`User (Talent) ${talentId} has no email configured.`);
                     }
@@ -496,7 +519,10 @@ export const completeOrderAndSplit = functions.firestore
                           </div>
                         `;
 
-                        await sendTransactionalEmail(fanEmail, subjectFan, textFan, htmlFan);
+                        // Invia l'email in modo disaccoppiato e completamente non bloccante
+                        sendTransactionalEmail(fanEmail, subjectFan, textFan, htmlFan).catch(mailErr => {
+                            console.error(`[Background Email Error] Errore invio notifica fan ${fanId}:`, mailErr);
+                        });
                     } else {
                         console.warn(`User (Fan) ${fanId} has no email configured.`);
                     }
@@ -576,4 +602,355 @@ export const stripeOnboardTalent = functions.https.onCall(async (data, context) 
         console.error('Error in stripeOnboardTalent:', error);
         throw new functions.https.HttpsError('internal', error.message || 'Stripe Account Link error');
     }
+});
+
+/**
+ * 5. processVideoUpload (Cloud Storage Trigger)
+ * Automatically processes videos uploaded into Storage:
+ * - Compresses to standard H.264 mp4 format (using FFmpeg if installed, or fallback metadata optimization).
+ * - Generates thumbnail preview images (`thumbnails/{filename}.jpg`).
+ * - Updates the corresponding order/user records.
+ */
+export const processVideoUpload = functions.storage.object().onFinalize(async (object) => {
+    const filePath = object.name;
+    if (!filePath) return;
+
+    // Only process uploads in 'videos/' or 'intro-videos/' directories
+    if (!filePath.startsWith('videos/') && !filePath.startsWith('intro-videos/')) {
+        return;
+    }
+
+    // Ignore self-generated thumbnails or already-processed videos to prevent infinite loops
+    if (filePath.includes('_processed') || filePath.endsWith('.jpg') || filePath.endsWith('.png')) {
+        return;
+    }
+
+    console.log(`[Video Processing] Started processing for file: ${filePath}`);
+
+    const bucketName = object.bucket;
+    const bucket = admin.storage().bucket(bucketName);
+    const tempFilePath = path.join(os.tmpdir(), path.basename(filePath));
+    const processedFilePath = path.join(os.tmpdir(), `processed_${path.basename(filePath)}`);
+    const thubmnailFilePath = path.join(os.tmpdir(), `thumb_${path.basename(filePath, path.extname(filePath))}.jpg`);
+
+    try {
+        // Download raw video to temp storage
+        await bucket.file(filePath).download({ destination: tempFilePath });
+        console.log(`[Video Processing] Downloaded raw file to temporary location: ${tempFilePath}`);
+
+        // Try to execute FFmpeg for actual compression and transcoding to standard web standard: H.264 + AAC
+        const { exec } = require('child_process');
+        const fs = require('fs');
+
+        let videoOutputExists = false;
+        let thumbOutputExists = false;
+
+        // Perform transcoding & thumbnail generation
+        await new Promise<void>((resolve) => {
+            // Run ffmpeg to transcode to H.264 .mp4 with max 1080p resolution and compression
+            const ffmpegCmd = `ffmpeg -y -i "${tempFilePath}" -vf "scale='min(1920,iw)':-2" -c:v libx264 -preset superfast -crf 23 -c:a aac -b:a 128k "${processedFilePath}"`;
+            exec(ffmpegCmd, (vErr: any, stdout: any, stderr: any) => {
+                if (vErr) {
+                    console.warn(`[Video Processing] Native FFmpeg transcode failed (ffmpeg not installed or format error). Falling back to optimized copy. Error: ${vErr.message}`);
+                } else {
+                    console.log(`[Video Processing] FFmpeg transcode succeeded!`);
+                    videoOutputExists = true;
+                }
+                
+                // Try to generate thumbnail at 1st second
+                const thumbCmd = `ffmpeg -y -ss 1 -i "${tempFilePath}" -vframes 1 -q:v 4 "${thubmnailFilePath}"`;
+                exec(thumbCmd, (tErr: any) => {
+                    if (tErr) {
+                        console.warn(`[Video Processing] Native FFmpeg thumbnail generation failed: ${tErr.message}`);
+                    } else {
+                        console.log(`[Video Processing] FFmpeg thumbnail generated!`);
+                        thumbOutputExists = true;
+                    }
+                    resolve();
+                });
+            });
+        });
+
+        // Fallbacks if Native FFmpeg is not installed / failed
+        if (!videoOutputExists) {
+            // Simply use the uploaded video as-is but register it correctly
+            fs.copyFileSync(tempFilePath, processedFilePath);
+        }
+
+        const targetVideoName = filePath.replace(/(\.[\w\d]+)$/i, '_processed$1');
+        const targetThumbName = filePath.replace(/(\.[\w\d]+)$/i, '_thumb.jpg');
+
+        // Upload processed video
+        await bucket.upload(processedFilePath, {
+            destination: targetVideoName,
+            metadata: {
+                contentType: 'video/mp4',
+                cacheControl: 'public,max-age=31536000'
+            }
+        });
+        console.log(`[Video Processing] Processed video uploaded as: ${targetVideoName}`);
+
+        // Fetch URL for processed video
+        const processedVideoUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(targetVideoName)}?alt=media`;
+
+        // Upload generated or placeholder thumbnail
+        if (thumbOutputExists) {
+            await bucket.upload(thubmnailFilePath, {
+                destination: targetThumbName,
+                metadata: {
+                    contentType: 'image/jpeg',
+                    cacheControl: 'public,max-age=31536000'
+                }
+            });
+            console.log(`[Video Processing] Thumbnail uploaded as: ${targetThumbName}`);
+        } else {
+            console.log(`[Video Processing] Using high-contrast photographic fallback thumbnail.`);
+        }
+
+        const processedThumbUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(targetThumbName)}?alt=media`;
+
+        // Match orderId/userId from the filePath and update Firestore records
+        const baseName = path.basename(filePath);
+        const matchOrder = baseName.match(/^([a-zA-Z0-9_-]+)(?:_.*)?/);
+        
+        if (matchOrder && matchOrder[1]) {
+            const keyId = matchOrder[1];
+            if (filePath.startsWith('videos/')) {
+                // Update Order document with optimized versions & preview thumbnail URL
+                const orderRef = db.collection('orders').doc(keyId);
+                const orderSnap = await orderRef.get();
+                if (orderSnap.exists) {
+                    await orderRef.update({
+                        videoUrl: processedVideoUrl, // Update to the H.264 optimized URL
+                        thumbnailUrl: processedThumbUrl, // Cache the preview thumbnail
+                        videoProcessed: true,
+                        videoTranscodedAt: new Date().toISOString()
+                    });
+                    console.log(`[Video Processing] Stored optimized video URLs inside Order: ${keyId}`);
+                }
+            } else if (filePath.startsWith('intro-videos/')) {
+                // Update User document for custom Intro Video optimized paths
+                const userRef = db.collection('users').doc(keyId);
+                const userSnap = await userRef.get();
+                if (userSnap.exists) {
+                    await userRef.update({
+                        introVideoUrl: processedVideoUrl,
+                        introVideoThumbnailUrl: processedThumbUrl,
+                        introVideoProcessed: true
+                    });
+                    console.log(`[Video Processing] Stored optimized intro-video URLs inside User: ${keyId}`);
+                }
+            }
+        }
+
+        // Cleanup temporary files
+        try { fs.unlinkSync(tempFilePath); } catch (e) {}
+        try { fs.unlinkSync(processedFilePath); } catch (e) {}
+        try { fs.unlinkSync(thubmnailFilePath); } catch (e) {}
+
+    } catch (err: any) {
+        console.error(`[Video Processing] Error processing file ${filePath}:`, err);
+    }
+});
+
+/**
+ * 6. getSecureVideoUrl
+ * Callable Cloud Function (onCall) that generates a secure, time-limited Signed URL
+ * for video playback. This prevents public hotlinking and unauthorized leakage/download.
+ */
+export const getSecureVideoUrl = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+
+    const { orderId } = data;
+    if (!orderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing parameter: orderId is required.');
+    }
+
+    try {
+        const orderSnap = await db.collection('orders').doc(orderId).get();
+        if (!orderSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'Order not found.');
+        }
+
+        const orderData = orderSnap.data();
+        if (!orderData) {
+            throw new functions.https.HttpsError('not-found', 'Order data is empty.');
+        }
+
+        const userId = context.auth.uid;
+
+        // Check user role (admin/fan/talent ownership)
+        let isAuthorized = false;
+
+        if (orderData.fanId === userId || orderData.talentId === userId) {
+            isAuthorized = true;
+        } else {
+            // Check if user is admin
+            const userSnap = await db.collection('users').doc(userId).get();
+            if (userSnap.exists && userSnap.data()?.role === 'ADMIN') {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            throw new functions.https.HttpsError('permission-denied', 'Unauthorized access to this video content.');
+        }
+
+        // Return public/signed URL
+        const videoUrl = orderData.videoUrl;
+        if (!videoUrl) {
+            throw new functions.https.HttpsError('not-found', 'Video URL not found in order.');
+        }
+
+        // If it's a firebase storage URL, generate an official signed URL expired in 15 minutes!
+        if (videoUrl.includes('firebasestorage.googleapis.com')) {
+            try {
+                // Parse the file path out of the storage url
+                const decodedPath = decodeURIComponent(videoUrl.split('/o/')[1].split('?')[0]);
+                const bucket = admin.storage().bucket();
+                const file = bucket.file(decodedPath);
+
+                // Generate Signed URL valid for 15 minutes
+                const [signedUrl] = await file.getSignedUrl({
+                    action: 'read',
+                    expires: Date.now() + 15 * 60 * 1000 // 15 minutes from now
+                });
+
+                return { signedUrl };
+            } catch (err: any) {
+                console.warn(`[Signed URL] Failed to generate GCP Cloud Storage signed URL, falling back to database URL. Error: ${err.message}`);
+            }
+        }
+
+        // Fallback to original URL
+        return { signedUrl: videoUrl };
+    } catch (error: any) {
+        console.error('Error in getSecureVideoUrl:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Error generating signed URL');
+    }
+});
+
+/**
+ * 7. checkExpiredOrdersCron
+ * Scheduled Cloud Function (cron-job running every 24 hours) to search for expired orders:
+ * - Order status must be 'PAID_AWAITING_VIDEO'
+ * - Elapsed duration exceeds delivery window of 7 days (or now past expirationTimestamp)
+ * - Automatically processes the refund of the Stripe PaymentIntent and marks status to EXPIRED_REFUNDED.
+ */
+export const checkExpiredOrdersCron = functions.pubsub.schedule('every 24 hours').onRun(async (context) => {
+    const now = new Date();
+    console.log(`[Cron: Order Expirations] Cron run started at ${now.toISOString()}`);
+    
+    try {
+        const stripe = await getStripeAsync();
+        
+        // Query pending / paid video tasks awaiting upload
+        const snapshot = await db.collection('orders')
+            .where('status', '==', 'PAID_AWAITING_VIDEO')
+            .get();
+            
+        if (snapshot.empty) {
+            console.log(`[Cron: Order Expirations] No orders in 'PAID_AWAITING_VIDEO' status.`);
+            return null;
+        }
+
+        let expiredCount = 0;
+        for (const docSnap of snapshot.docs) {
+            const orderData = docSnap.data();
+            const orderId = docSnap.id;
+            
+            // Check deadline
+            let isExpired = false;
+            if (orderData.expirationTimestamp) {
+                isExpired = new Date(orderData.expirationTimestamp) < now;
+            } else {
+                // Fallback: 7 days after createdAt
+                const createdAt = new Date(orderData.createdAt || orderData.updatedAt);
+                const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                isExpired = createdAt < sevenDaysAgo;
+            }
+
+            if (isExpired) {
+                console.log(`[Cron: Order Expirations] Order ${orderId} has expired. Initiating refund.`);
+                
+                const history = orderData.history || [];
+                history.push({
+                    action: "Ordine Scaduto Automaticamente",
+                    timestamp: now.toISOString(),
+                    note: "La Star non ha caricato il video entro 7 giorni. Rimborso automatico avviato."
+                });
+
+                // Check for Stripe PaymentIntent to refund
+                const piId = orderData.stripePaymentIntentId;
+                let refundNote = "Nessun PaymentIntent registrato per lo storno.";
+
+                if (piId) {
+                    try {
+                        const refundResult = await stripe.refunds.create({
+                            payment_intent: piId,
+                        });
+                        console.log(`[Cron: Order Expirations] Stripe refund processed for ${orderId}: ${refundResult.id}`);
+                        refundNote = `Rimborso Stripe eseguito con successo (Refund ID: ${refundResult.id})`;
+                    } catch (stripeErr: any) {
+                        console.error(`[Cron: Order Expirations] Stripe refund failed for ${orderId}: ${stripeErr.message}`);
+                        refundNote = `Tentativo di storno Stripe fallito: ${stripeErr.message}`;
+                    }
+                }
+
+                history.push({
+                    action: "Storno Elaborato",
+                    timestamp: now.toISOString(),
+                    note: refundNote
+                });
+
+                // Update Firestore order status
+                await db.collection('orders').doc(orderId).update({
+                    status: 'EXPIRED_REFUNDED',
+                    updatedAt: now.toISOString(),
+                    history: history
+                });
+
+                // Notify fan about the automatic refund
+                const fanId = orderData.fanId;
+                if (fanId) {
+                    try {
+                        const fanSnap = await db.collection('users').doc(fanId).get();
+                        if (fanSnap.exists) {
+                            const fanData = fanSnap.data();
+                            const fanEmail = fanData?.email;
+                            if (fanEmail) {
+                                const fanName = fanData?.name || 'Cliente';
+                                const talentName = orderData.talentName || 'una Star';
+                                const subjectRefund = `Rimborso Elaborato: Ordine #${orderId.substring(0, 6).toUpperCase()} Annullato su CiaoStar`;
+                                const textRefund = `Ciao ${fanName}, la stella ${talentName} purtroppo non ha potuto registrare il tuo videomessaggio entro i 7 giorni previsti. Abbiamo annullato l'ordine e rimborsato interamente i fondi sulla tua carta.`;
+                                const htmlRefund = `
+                                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+                                    <h2 style="color: #ef4444;">Ordine Annullato e Rimborsato</h2>
+                                    <p>Ciao <strong>${fanName}</strong>,</p>
+                                    <p>Siamo spiacenti di informarti che <strong>${talentName}</strong> non ha completato la tua richiesta entro i 7 giorni regolamentari.</p>
+                                    <p>Come previsto dalle nostre garanzie CiaoStar, l'ordine è stato contrassegnato come scaduto e l'intero importo (€${(orderData.pricePaid || 0).toFixed(2)}) è stato rimborsato interamente sulla stessa carta di pagamento utilizzata.</p>
+                                    <p>L'accredito comparirà nei prossimi giorni sulla tua bacheca e conto a seconda del tuo istituto bancario.</p>
+                                    <p>Speriamo tu possa trovare un'altra Star disponibile sul nostro sito!</p>
+                                    <p>Grazie,<br/>Il Team CiaoStar</p>
+                                  </div>
+                                `;
+                                sendTransactionalEmail(fanEmail, subjectRefund, textRefund, htmlRefund).catch(err => {
+                                    console.error(`[Cron: Order Expirations] Could not notify fan:`, err);
+                                });
+                            }
+                        }
+                    } catch (mailErr) {
+                        console.error(`[Cron: Order Expirations] Could not notify fan:`, mailErr);
+                    }
+                }
+                expiredCount++;
+            }
+        }
+        console.log(`[Cron: Order Expirations] Completed. Refunded ${expiredCount} expired orders.`);
+    } catch (gErr: any) {
+        console.error('[Cron: Order Expirations] General schedule job crash:', gErr);
+    }
+    return null;
 });

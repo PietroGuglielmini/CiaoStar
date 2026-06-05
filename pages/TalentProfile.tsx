@@ -251,7 +251,7 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                     <div className="px-4 pb-4">
                         <div className="flex items-center gap-2 mb-2">
                             <h1 className="text-3xl font-extrabold text-slate-900">{talent.name}</h1>
-                            <div className="bg-blue-500 rounded-full p-0.5"><CheckCircle className="w-4 h-4 text-white" /></div>
+                            <div className="bg-amber-500 rounded-full p-0.5"><CheckCircle className="w-4 h-4 text-white" /></div>
                         </div>
                         <p className="text-slate-500 font-medium text-lg leading-relaxed mb-6">{talent.bio}</p>
                         
