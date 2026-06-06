@@ -1,6 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import ErrorBoundary from './components/ErrorBoundary';
+import { useOfflineStatus } from './hooks/useOfflineStatus';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CookieBanner from './components/CookieBanner';
@@ -22,13 +25,14 @@ import { User, UserRole, AdminSettings as SettingsType } from './types';
 import { auth } from './firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
 import { syncUserToDB, getAdminSettings, acceptNewTerms, getUserById } from './services/dataService';
-import { Loader2, ShieldCheck, UserCog } from 'lucide-react';
+import { Loader2, ShieldCheck, UserCog, WifiOff } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [adminSettings, setAdminSettings] = useState<SettingsType | null>(null);
   const [realAdminId, setRealAdminId] = useState<string | null>(sessionStorage.getItem('realAdminId'));
+  const isOffline = useOfflineStatus();
 
   useEffect(() => {
     let active = true;
@@ -157,86 +161,96 @@ const App: React.FC = () => {
   const needsTermsUpdate = user?.role === UserRole.TALENT && adminSettings && user.lastAcceptedTermsVersion < adminSettings.termsVersion;
 
   return (
-    <Router>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        {realAdminId && (
-            <div className="bg-red-600 text-white py-2 px-4 flex items-center justify-between z-[60] sticky top-0 shadow-lg">
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
-                    <UserCog className="w-4 h-4" />
-                    <span>Sei in modalità Impersonificazione: <strong>{user?.name}</strong></span>
-                </div>
-                <button 
-                    onClick={handleStopImpersonation}
-                    className="bg-white text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-gray-100 transition-colors"
-                >
-                    Torna ad Admin
-                </button>
+    <ErrorBoundary>
+      <Router>
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+          {isOffline && (
+            <div className="bg-amber-500 text-white py-2 px-4 flex items-center justify-center gap-2 z-[999] sticky top-0 shadow text-xs font-black uppercase tracking-widest animate-pulse">
+              <WifiOff className="w-4 h-4" />
+              <span>Sei offline. Le funzionalità sono limitate.</span>
             </div>
-        )}
+          )}
 
-        <Navbar user={user} onLogout={() => {
-          sessionStorage.removeItem('mockUserId');
-          sessionStorage.removeItem('impersonatedUserId');
-          sessionStorage.removeItem('realAdminId');
-          firebaseAuth.signOut(auth);
-          setUser(null);
-        }} />
-        
-        {needsTermsUpdate && (
-            <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
-                <div className="bg-white rounded-[2.5rem] p-10 md:p-14 max-w-lg w-full shadow-2xl text-center border border-gray-100">
-                    <div className="w-20 h-20 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-sm">
-                        <ShieldCheck className="w-10 h-10" />
-                    </div>
-                    <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Protocollo Star</h2>
-                    <div className="text-slate-500 mb-10 space-y-4 text-xs tracking-wide leading-relaxed uppercase font-semibold">
-                        <p className="text-indigo-600 font-bold">Aggiornamenti obbligatori:</p>
-                        <ul className="space-y-3">
-                            <li className="bg-gray-50 py-2 px-4 rounded-xl">Identificazione chiara e udibile</li>
-                            <li className="bg-gray-50 py-2 px-4 rounded-xl">Durata minima video: 20 secondi</li>
-                            <li className="bg-gray-50 py-2 px-4 rounded-xl">Solo performance reali (No AI)</li>
-                        </ul>
-                    </div>
-                    <button 
-                        onClick={handleAcceptTerms}
-                        className="btn-primary w-full py-4 text-sm"
-                    >
-                        Accetta e Continua
-                    </button>
-                </div>
-            </div>
-        )}
+          {realAdminId && (
+              <div className="bg-red-600 text-white py-2 px-4 flex items-center justify-between z-[60] sticky top-0 shadow-lg">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
+                      <UserCog className="w-4 h-4" />
+                      <span>Sei in modalità Impersonificazione: <strong>{user?.name}</strong></span>
+                  </div>
+                  <button 
+                      onClick={handleStopImpersonation}
+                      className="bg-white text-red-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase hover:bg-gray-100 transition-colors"
+                  >
+                      Torna ad Admin
+                  </button>
+              </div>
+          )}
 
-        <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-              <Route path="/become-star" element={<BecomeStar />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/talent/:id" element={<TalentProfile currentUser={user} />} />
-              {adminSettings?.talentSlugPrefix && adminSettings.talentSlugPrefix !== 'talent' && (
-                <Route path={`/${adminSettings.talentSlugPrefix}/:id`} element={<TalentProfile currentUser={user} />} />
-              )}
-              <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
-              <Route path="/messages" element={user ? <UserChat user={user} /> : <Navigate to="/login" />} />
-              <Route path="/settings" element={user ? <TalentSettings user={user} /> : <Navigate to="/login" />} />
-              
-              <Route path="/admin" element={user?.role === UserRole.ADMIN ? <Navigate to="/admin/users" replace /> : <Navigate to="/" />} />
-              <Route path="/admin/orders" element={user?.role === UserRole.ADMIN ? <AdminOrders /> : <Navigate to="/" />} />
-              <Route path="/admin/media" element={user?.role === UserRole.ADMIN ? <AdminMedia /> : <Navigate to="/" />} />
-              <Route path="/admin/settings" element={user?.role === UserRole.ADMIN ? <AdminSettings /> : <Navigate to="/" />} />
-              <Route path="/admin/chat" element={user?.role === UserRole.ADMIN ? <AdminChat user={user} /> : <Navigate to="/" />} />
-              <Route path="/admin/users" element={user?.role === UserRole.ADMIN ? <AdminUsers onImpersonate={handleImpersonate} /> : <Navigate to="/" />} />
-              <Route path="/admin/reviews" element={user?.role === UserRole.ADMIN ? <AdminReviews /> : <Navigate to="/" />} />
-              
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-        </main>
+          <Navbar user={user} onLogout={() => {
+            sessionStorage.removeItem('mockUserId');
+            sessionStorage.removeItem('impersonatedUserId');
+            sessionStorage.removeItem('realAdminId');
+            firebaseAuth.signOut(auth);
+            setUser(null);
+          }} />
+          
+          {needsTermsUpdate && (
+              <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6">
+                  <div className="bg-white rounded-[2.5rem] p-10 md:p-14 max-w-lg w-full shadow-2xl text-center border border-gray-100">
+                      <div className="w-20 h-20 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-sm">
+                          <ShieldCheck className="w-10 h-10" />
+                      </div>
+                      <h2 className="text-3xl font-extrabold text-slate-900 mb-4">Protocollo Star</h2>
+                      <div className="text-slate-500 mb-10 space-y-4 text-xs tracking-wide leading-relaxed uppercase font-semibold">
+                          <p className="text-indigo-600 font-bold">Aggiornamenti obbligatori:</p>
+                          <ul className="space-y-3">
+                              <li className="bg-gray-50 py-2 px-4 rounded-xl">Identificazione chiara e udibile</li>
+                              <li className="bg-gray-50 py-2 px-4 rounded-xl">Durata minima video: 20 secondi</li>
+                              <li className="bg-gray-50 py-2 px-4 rounded-xl">Solo performance reali (No AI)</li>
+                          </ul>
+                      </div>
+                      <button 
+                          onClick={handleAcceptTerms}
+                          className="btn-primary w-full py-4 text-sm"
+                      >
+                          Accetta e Continua
+                      </button>
+                  </div>
+              </div>
+          )}
 
-        <Footer user={user} />
-        <CookieBanner />
-      </div>
-    </Router>
+          <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+                <Route path="/become-star" element={<BecomeStar />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/talent/:id" element={<TalentProfile currentUser={user} />} />
+                {adminSettings?.talentSlugPrefix && adminSettings.talentSlugPrefix !== 'talent' && (
+                  <Route path={`/${adminSettings.talentSlugPrefix}/:id`} element={<TalentProfile currentUser={user} />} />
+                )}
+                <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
+                <Route path="/messages" element={user ? <UserChat user={user} /> : <Navigate to="/login" />} />
+                <Route path="/settings" element={user ? <TalentSettings user={user} /> : <Navigate to="/login" />} />
+                
+                <Route path="/admin" element={user?.role === UserRole.ADMIN ? <Navigate to="/admin/users" replace /> : <Navigate to="/" />} />
+                <Route path="/admin/orders" element={user?.role === UserRole.ADMIN ? <AdminOrders /> : <Navigate to="/" />} />
+                <Route path="/admin/media" element={user?.role === UserRole.ADMIN ? <AdminMedia /> : <Navigate to="/" />} />
+                <Route path="/admin/settings" element={user?.role === UserRole.ADMIN ? <AdminSettings /> : <Navigate to="/" />} />
+                <Route path="/admin/chat" element={user?.role === UserRole.ADMIN ? <AdminChat user={user} /> : <Navigate to="/" />} />
+                <Route path="/admin/users" element={user?.role === UserRole.ADMIN ? <AdminUsers onImpersonate={handleImpersonate} /> : <Navigate to="/" />} />
+                <Route path="/admin/reviews" element={user?.role === UserRole.ADMIN ? <AdminReviews /> : <Navigate to="/" />} />
+                
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+          </main>
+
+          <Footer user={user} />
+          <CookieBanner />
+        </div>
+        <Toaster position="top-right" />
+      </Router>
+    </ErrorBoundary>
   );
 };
 

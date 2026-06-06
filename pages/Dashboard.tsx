@@ -1,10 +1,12 @@
 
 import React, { useEffect, useState, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { User, UserRole, VideoRequest, RequestStatus, AdminSettings } from '../types';
 import { getRequestsForUser, updateRequestStatus, uploadVideo, getTalents, uploadVideoOnly, deliverVideo, acceptVideoDefinitively, openDispute, correctVideoRequest, getAdminSettings, submitReview, subscribeToRequestsForUser, updateTalentProfile, syncUserToDB, deleteUserAccount, uploadVideoResumable, uploadAndDeliverVideoResumable, uploadVideoOnlyResumable } from '../services/dataService';
 import { auth } from '../firebaseConfig';
 import { deleteUser } from 'firebase/auth';
 import VideoPlayer from '../components/VideoPlayer';
+import { Skeleton, TableSkeleton } from '../components/Skeleton';
 import { 
   Loader2, CheckCircle, Package, Clock, RefreshCw,
   Download, Gift, PlayCircle, Check, X, Upload, Video, ShieldCheck, AlertCircle, TrendingUp, ArrowDownRight, MessageSquare, CornerUpLeft, Info, ExternalLink, AlertTriangle,
@@ -594,9 +596,10 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       if (confirm("Accetti di realizzare questo video messaggio?")) {
           try {
               await updateRequestStatus(orderId, RequestStatus.ACCEPTED);
+              toast.success("Richiesta accettata con successo!");
               refresh();
           } catch (e) {
-              alert("Errore accettazione.");
+              toast.error("Errore durante l'accettazione della richiesta.");
           }
       }
   };
@@ -605,11 +608,11 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       if (confirm("Sei sicuro di voler accettare definitivamente questo video messaggio? Inizierà il periodo di conservazione del file e non potrai più contestarlo.")) {
           try {
               await acceptVideoDefinitively(orderId);
-              alert("Video messaggio accettato con successo!");
+              toast.success("Video messaggio accettato con successo!");
               refresh();
           } catch (e) {
               console.error(e);
-              alert("Errore durante l'accettazione definitiva.");
+              toast.error("Errore durante l'accettazione definitiva.");
           }
       }
   };
@@ -623,19 +626,19 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const handleSubmitDispute = async () => {
       if (!disputeId) return;
       if (!disputeReason.trim()) {
-          alert("Per favore, inserisci un motivo per la contestazione.");
+          toast.error("Per favore, inserisci un motivo per la contestazione.");
           return;
       }
       setIsSubmittingDispute(true);
       try {
           await openDispute(disputeId, disputeCategory, disputeReason.trim());
-          alert("La tua contestazione è stata inviata allo Staff. L'amministratore controllerà l'ordine.");
+          toast.success("La tua contestazione è stata inviata allo Staff. L'amministratore controllerà l'ordine.");
           setDisputeId(null);
           setDisputeReason('');
           refresh();
       } catch (e) {
           console.error(e);
-          alert("Errore durante l'invio della contestazione.");
+          toast.error("Errore durante l'invio della contestazione.");
       } finally {
           setIsSubmittingDispute(false);
       }
@@ -644,7 +647,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const handleSubmitReview = async () => {
     if (!reviewingOrderId || !reviewingTalentId) return;
     if (!reviewComment.trim()) {
-      alert("Per favore inserisci un commento per la star!");
+      toast.error("Per favore inserisci un commento per la star!");
       return;
     }
 
@@ -658,7 +661,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         rating: reviewRating,
         comment: reviewComment.trim()
       });
-      alert("Recensione inviata con successo! Grazie del tuo feedback.");
+      toast.success("Recensione inviata con successo! Grazie del tuo feedback.");
       setShowReviewModal(false);
       setReviewingOrderId(null);
       setReviewingTalentId(null);
@@ -666,7 +669,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       refresh();
     } catch (e) {
       console.error(e);
-      alert("Errore durante l'invio della recensione.");
+      toast.error("Errore durante l'invio della recensione.");
     } finally {
       setIsSubmittingReview(false);
     }
@@ -675,7 +678,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const submitRejection = async () => {
       if (!rejectingId) return;
       if (!selectedRejectOptionId) {
-          alert("Per favore, seleziona un motivo per il rifiuto.");
+          toast.error("Per favore, seleziona un motivo per il rifiuto.");
           return;
       }
       
@@ -689,12 +692,13 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       setIsRejecting(true);
       try {
           await updateRequestStatus(rejectingId, RequestStatus.REJECTED, { rejectionReason: finalRejectionReason });
+          toast.success("Ordine rifiutato correttamente.");
           setRejectingId(null);
           setRejectionReason('');
           setSelectedRejectOptionId('');
           refresh();
       } catch (e) {
-          alert("Errore rifiuto.");
+          toast.error("Errore durante il rifiuto dell'ordine.");
       } finally {
           setIsRejecting(false);
       }
@@ -711,7 +715,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       e.preventDefault();
       if (!correctingId) return;
       if (!correctedRecipient.trim() || !correctedInstructions.trim() || !correctedOccasion.trim()) {
-          alert("Tutti i campi sono obbligatori.");
+          toast.error("Tutti i campi sono obbligatori.");
           return;
       }
       setIsSubmittingCorrection(true);
@@ -721,12 +725,12 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
               instructions: correctedInstructions,
               occasion: correctedOccasion
           });
-          alert("Richiesta corretta inviata con successo! La Star riceverà le istruzioni aggiornate.");
+          toast.success("Richiesta corretta inviata con successo! La Star riceverà le istruzioni aggiornate.");
           setCorrectingId(null);
           refresh();
       } catch (err) {
           console.error(err);
-          alert("Errore durante l'invio della correzione.");
+          toast.error("Errore durante l'invio della correzione.");
       } finally {
           setIsSubmittingCorrection(false);
       }
@@ -742,11 +746,11 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           });
           setUploadFile(null);
           setForceShowSelectorId(null);
-          alert("Video caricato con successo in modalità RESILIENTE! Verifica l'anteprima, conferma i requisiti di qualità e clicca su 'Consegna al Fan' per completare.");
+          toast.success("Video caricato con successo in modalità RESILIENTE! Verifica l'anteprima, conferma i requisiti di qualità e clicca su 'Consegna al Fan' per completare.");
           refresh();
       } catch (e: any) {
           console.error(e);
-          alert("Errore durante il caricamento resiliente del video: " + (e.message || "riprova."));
+          toast.error("Errore durante il caricamento resiliente del video: " + (e.message || "riprova."));
       } finally {
           setIsUploading(false);
           setUploadProgress(0);
@@ -755,7 +759,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   const handleDeliverSubmit = async (orderId: string) => {
       if (!qualityCheck.nameSaid || !qualityCheck.durationOk || !qualityCheck.audioClear) {
-          alert("Per favore, conferma tutti i requisiti di qualità prima di procedere con la consegna.");
+          toast.error("Per favore, conferma tutti i requisiti di qualità prima di procedere con la consegna.");
           return;
       }
       setIsUploading(true);
@@ -763,11 +767,11 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           await deliverVideo(orderId, qualityCheck);
           setUploadingId(null);
           setQualityCheck({ nameSaid: false, durationOk: false, audioClear: false });
-          alert("Video consegnato al Fan con successo!");
+          toast.success("Video consegnato al Fan con successo!");
           refresh();
       } catch (e: any) {
           console.error(e);
-          alert("Errore durante la consegna del video.");
+          toast.error("Errore durante la consegna del video.");
       } finally {
           setIsUploading(false);
       }
@@ -776,7 +780,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const handleUploadSubmit = async (orderId: string) => {
       if (!uploadFile) return;
       if (!qualityCheck.nameSaid || !qualityCheck.durationOk || !qualityCheck.audioClear) {
-          alert("Per favore, conferma tutti i requisiti di qualità prima di caricare.");
+          toast.error("Per favore, conferma tutti i requisiti di qualità prima di caricare.");
           return;
       }
 
@@ -806,7 +810,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           try {
               // Sposta lo stato dell'ordine in ACTION_REQUIRED per il talento
               await updateRequestStatus(orderId, RequestStatus.ACTION_REQUIRED);
-              alert(`⚠️ VALIDAZIONE VIDEO FALLITA (Cloud Storage Secure Validation):\n\n- Errore: ${errorMsg}\n\nL'ordine è stato reimpostato sullo stato "AZIONE RICHIESTA". Carica un video valido per completare il payout.`);
+              toast.error(`⚠️ VALIDAZIONE VIDEO FALLITA: ${errorMsg}. L'ordine è stato reimpostato su AZIONE RICHIESTA.`);
           } catch (err: any) {
               console.error("Errore aggiornamento stato in ACTION_REQUIRED:", err);
           } finally {
@@ -826,11 +830,11 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           setUploadingId(null);
           setUploadFile(null);
           setQualityCheck({ nameSaid: false, durationOk: false, audioClear: false });
-          alert("Video caricato ed elaborato con successo in modalità RESILIENTE! Fondi trasferiti ed ordine completato.");
+          toast.success("Video caricato ed elaborato con successo in modalità RESILIENTE! Fondi trasferiti ed ordine completato.");
           refresh();
       } catch (e: any) {
           console.error(e);
-          alert("Errore durante il caricamento resiliente del video: " + (e.message || "riprova."));
+          toast.error("Errore durante il caricamento resiliente del video: " + (e.message || "riprova."));
       } finally {
           setIsUploading(false);
           setUploadProgress(0);
@@ -838,9 +842,23 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   };
 
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-        <Loader2 className="animate-spin w-10 h-10 text-indigo-600 mb-4" />
-        <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Sincronizzazione Dashboard...</p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div className="space-y-3">
+                <Skeleton className="h-8 w-60" />
+                <Skeleton className="h-4 w-40" />
+            </div>
+            <Skeleton className="h-12 w-32 rounded-2xl" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <Skeleton className="h-32 rounded-3xl" />
+            <Skeleton className="h-32 rounded-3xl" />
+            <Skeleton className="h-32 rounded-3xl" />
+        </div>
+        <div className="space-y-4">
+            <Skeleton className="h-14 w-full rounded-2xl" />
+            <TableSkeleton rows={4} />
+        </div>
     </div>
   );
 

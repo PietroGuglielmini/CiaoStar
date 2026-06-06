@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { VideoRequest, RequestStatus } from '../types';
 import { getOrdersAdminPaginated, resolveDispute, getTalents, callPartialRefundOrder } from '../services/dataService';
 import { Loader2, AlertTriangle, Check, X, Play, Filter, CreditCard, Clock, Info, Download, Calendar, BarChart3, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -204,12 +205,12 @@ const AdminOrders: React.FC = () => {
     const handlePartialRefund = async (orderId: string, maxAmount: number) => {
         const amtStr = partialRefundState[orderId];
         if (!amtStr) {
-            alert("Inserisci un importo valido per il rimborso parziale.");
+            toast.error("Inserisci un importo valido per il rimborso parziale.");
             return;
         }
         const amt = parseFloat(amtStr);
         if (isNaN(amt) || amt <= 0 || amt > maxAmount) {
-            alert(`L'importo inserito (€${amtStr}) non è valido. Deve essere compreso tra €0.01 e €${maxAmount.toFixed(2)}.`);
+            toast.error(`L'importo inserito (€${amtStr}) non è valido. Deve essere compreso tra €0.01 e €${maxAmount.toFixed(2)}.`);
             return;
         }
 
@@ -221,15 +222,15 @@ const AdminOrders: React.FC = () => {
         try {
             const res = await callPartialRefundOrder(orderId, amt);
             if (res.success) {
-                alert("Rimborso parziale eseguito con successo tramite stripe Connect!");
+                toast.success("Rimborso parziale eseguito con successo tramite Stripe Connect!");
                 setPartialRefundState(prev => ({ ...prev, [orderId]: '' }));
                 load();
             } else {
-                alert("Il rimborso parziale non ha avuto buon fine.");
+                toast.error("Il rimborso parziale non ha avuto buon fine.");
             }
         } catch (err: any) {
             console.error(err);
-            alert("Errore durante l'esecuzione del rimborso: " + (err.message || err));
+            toast.error("Errore durante l'esecuzione del rimborso: " + (err.message || err));
         } finally {
             setRefundSaving(prev => ({ ...prev, [orderId]: false }));
         }

@@ -963,7 +963,7 @@ export const openDispute = async (requestId: string, category: DisputeCategory, 
     };
 
     await updateDoc(orderRef, { 
-        status: RequestStatus.DISPUTE_OPEN, 
+        status: RequestStatus.IN_DISPUTE, 
         disputeCategory: category,
         disputeReason: reason,
         history: [...history, newEvent],

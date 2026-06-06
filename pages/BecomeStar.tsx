@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { db } from '../firebaseConfig';
 import { collection, addDoc } from 'firebase/firestore';
 import { DB_CATEGORIES_SEED } from '../constants';
@@ -23,7 +24,7 @@ const BecomeStar: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!acceptTerms) {
-      alert("È obbligatorio accettare i termini di presentazione candidatura.");
+      toast.error("È obbligatorio accettare i termini di presentazione candidatura.");
       return;
     }
 
@@ -40,10 +41,11 @@ const BecomeStar: React.FC = () => {
         status: 'PENDING',
         createdAt: new Date().toISOString()
       });
+      toast.success("Candidatura inviata con successo!");
       setSuccess(true);
     } catch (err: any) {
       console.error("Errore durante l'invio della candidatura:", err);
-      alert("Errore durante l'invio: " + (err.message || err));
+      toast.error("Errore durante l'invio: " + (err.message || err));
     } finally {
       setLoading(false);
     }

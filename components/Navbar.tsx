@@ -69,7 +69,9 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
               <div className="relative">
                 <button 
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="p-2.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all relative"
+                  className="p-2.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-50 transition-all relative focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  aria-label="Apri notifiche"
+                  aria-expanded={showNotifications}
                 >
                   <Bell className="w-5 h-5" />
                   {unreadCount > 0 && (
@@ -171,11 +173,11 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
                     
                     {user.role === UserRole.ADMIN && (
                       <div className="flex items-center space-x-4 border-l border-gray-200 pl-6">
-                        <Link to="/admin/users" title="Gestione Utenti"><Users className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
-                        <Link to="/admin/orders" title="Audit Ordini"><CreditCard className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
-                        <Link to="/admin/media" title="Gestione Media"><Film className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
-                        <Link to="/admin/reviews" title="Moderazione Recensioni"><MessageSquare className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
-                        <Link to="/admin/settings" title="Configurazione"><Settings className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
+                        <Link to="/admin/users" title="Gestione Utenti" aria-label="Gestione Utenti" className="focus:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-lg p-1 transition-all"><Users className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
+                        <Link to="/admin/orders" title="Audit Ordini" aria-label="Audit Ordini" className="focus:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-lg p-1 transition-all"><CreditCard className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
+                        <Link to="/admin/media" title="Gestione Media" aria-label="Gestione Media" className="focus:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-lg p-1 transition-all"><Film className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
+                        <Link to="/admin/reviews" title="Moderazione Recensioni" aria-label="Moderazione Recensioni" className="focus:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-lg p-1 transition-all"><MessageSquare className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
+                        <Link to="/admin/settings" title="Configurazione" aria-label="Configurazione" className="focus:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 rounded-lg p-1 transition-all"><Settings className="w-5 h-5 text-slate-400 hover:text-indigo-600"/></Link>
                       </div>
                     )}
                   </div>
@@ -187,7 +189,11 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
                       <p className="text-sm font-bold text-slate-900 leading-none">{user.name}</p>
                       <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">{user.role}</p>
                     </div>
-                    <button onClick={onLogout} className="p-2 text-slate-400 hover:text-red-500 transition-colors">
+                    <button 
+                      onClick={onLogout} 
+                      className="p-2 text-slate-400 hover:text-red-500 transition-colors focus:ring-2 focus:ring-rose-500 focus:outline-none rounded-lg"
+                      aria-label="Inizia la procedura di disconnessione"
+                    >
                       <LogOut className="w-5 h-5" />
                     </button>
                   </div>
@@ -202,7 +208,9 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
 
             <button 
               onClick={() => setIsOpen(!isOpen)} 
-              className="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors"
+              className="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              aria-label="Menu principale di navigazione"
+              aria-expanded={isOpen}
             >
             {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>

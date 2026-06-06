@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent, callCreatePaymentIntent, subscribeToOrderChanges, incrementProfileViews } from '../services/dataService';
 import { applyTalentSEO } from '../services/seoService';
+import { Skeleton } from '../components/Skeleton';
 import { Talent, User, AdminSettings, UserRole, Review } from '../types';
 import { OCCASIONS } from '../constants';
 import { 
@@ -313,9 +314,36 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   };
 
   if (loading) return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-      <Loader2 className="animate-spin text-indigo-600 w-10 h-10 mb-4" />
-      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Caricamento Profilo Star...</p>
+    <div className="bg-gray-50 min-h-screen pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm flex flex-col md:flex-row gap-8 items-center md:items-start">
+              <Skeleton className="w-48 h-48 rounded-3xl shrink-0" />
+              <div className="space-y-4 flex-1 w-full text-center md:text-left">
+                <Skeleton className="h-8 w-2/3 mx-auto md:mx-0" />
+                <Skeleton className="h-4 w-1/3 mx-auto md:mx-0" />
+                <Skeleton className="h-16 w-5/6 mx-auto md:mx-0" />
+              </div>
+            </div>
+            <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm space-y-6">
+              <Skeleton className="h-6 w-40" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Skeleton className="h-20 rounded-2xl" />
+                <Skeleton className="h-20 rounded-2xl" />
+              </div>
+            </div>
+          </div>
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm space-y-6">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-12 w-full rounded-2xl" />
+              <Skeleton className="h-32 w-full rounded-2xl" />
+              <Skeleton className="h-12 w-full rounded-2xl" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
   

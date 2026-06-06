@@ -32,10 +32,25 @@ const TalentCard: React.FC<TalentCardProps> = ({ talent }) => {
     }
   }, [talent.id]);
 
+  const handleCardClick = () => {
+    navigate(`/${prefix}/${talent.id}`);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleCardClick();
+    }
+  };
+
   return (
     <div 
-      className="card-star group cursor-pointer h-full flex flex-col"
-      onClick={() => navigate(`/${prefix}/${talent.id}`)}
+      role="link"
+      tabIndex={0}
+      aria-label={`Visualizza il profilo e prenota un videomessaggio da ${talent.name}`}
+      className="card-star group cursor-pointer h-full flex flex-col focus-within:ring-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none focus:scale-[1.01] transition-all"
+      onClick={handleCardClick}
+      onKeyDown={handleKeyDown}
     >
       <div className="relative aspect-[4/5] overflow-hidden">
         <img 

@@ -113,8 +113,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, orderId, watermarkUrl, c
                         {/* Custom Fullscreen Trigger */}
                         <button 
                             onClick={toggleFullscreen}
-                            className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity z-30 hover:bg-black/80"
+                            className="absolute top-2 right-2 bg-black/70 text-white p-2 rounded-md opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity z-30 hover:bg-black/90 focus:ring-2 focus:ring-indigo-505 focus:outline-none"
                             title="Schermo Intero"
+                            aria-label="Ingrandisci a schermo intero"
                         >
                             <Maximize className="w-4 h-4" />
                         </button>

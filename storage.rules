@@ -37,12 +37,12 @@ service firebase.storage {
                    && request.resource.contentType.matches('video/.*');
     }
 
-    // 3. Delivered order videos (Max 250MB webm/mp4 videos)
+    // 3. Delivered order videos (Max 250MB, strictly video/mp4, video/webm, video/quicktime, allowed to TALENT or ADMIN under isTalent function)
     match /videos/{filename} {
       allow read: if isAuthenticated();
       allow write: if isTalent() 
                    && isUnderSizeLimit(250) 
-                   && request.resource.contentType.matches('video/.*');
+                   && (request.resource.contentType in ['video/mp4', 'video/webm', 'video/quicktime']);
     }
 
     // 4. Client watermark resources

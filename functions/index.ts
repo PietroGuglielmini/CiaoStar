@@ -115,8 +115,8 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
  * Handles payment_intent.succeeded and updates Firestore order status to PAID_AWAITING_VIDEO.
  */
 export const stripeWebhook = functions.https.onRequest(async (req, res) => {
-    const signature = req.headers['stripe-signature'];
-    if (!signature) {
+    const sig = req.headers['stripe-signature'];
+    if (!sig) {
         res.status(400).send('Webhook Error: Missing Stripe signature header');
         return;
     }
@@ -148,9 +148,9 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
             apiVersion: '2023-10-16' as any,
         });
 
-        // Read raw body if available (usually req.rawBody contains the buffered body in Cloud Functions)
+        // Use req.rawBody or raw buffer fallback to validate high-fidelity crypto signature
         const rawBody = (req as any).rawBody || req.body;
-        event = stripe.webhooks.constructEvent(rawBody, signature, endpointSecret || '');
+        event = stripe.webhooks.constructEvent(rawBody, sig as string, endpointSecret || '');
     } catch (err: any) {
         console.error('Webhook signature verification failed:', err.message);
         res.status(400).send(`Webhook Error: ${err.message}`);
