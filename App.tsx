@@ -38,6 +38,11 @@ const App: React.FC = () => {
       const settings = await getAdminSettings();
       if (!active) return;
       setAdminSettings(settings);
+      if (settings?.talentSlugPrefix) {
+        sessionStorage.setItem('talentSlugPrefix', settings.talentSlugPrefix);
+      } else {
+        sessionStorage.setItem('talentSlugPrefix', 'talent');
+      }
 
       // Se c'è un login di test locale/sviluppo attivo
       const mockUserId = sessionStorage.getItem('mockUserId');
@@ -209,9 +214,12 @@ const App: React.FC = () => {
               <Route path="/become-star" element={<BecomeStar />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/talent/:id" element={<TalentProfile currentUser={user} />} />
+              {adminSettings?.talentSlugPrefix && adminSettings.talentSlugPrefix !== 'talent' && (
+                <Route path={`/${adminSettings.talentSlugPrefix}/:id`} element={<TalentProfile currentUser={user} />} />
+              )}
               <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
               <Route path="/messages" element={user ? <UserChat user={user} /> : <Navigate to="/login" />} />
-              <Route path="/settings" element={user?.role === UserRole.TALENT ? <TalentSettings user={user} /> : <Navigate to="/" />} />
+              <Route path="/settings" element={user ? <TalentSettings user={user} /> : <Navigate to="/login" />} />
               
               <Route path="/admin" element={user?.role === UserRole.ADMIN ? <Navigate to="/admin/users" replace /> : <Navigate to="/" />} />
               <Route path="/admin/orders" element={user?.role === UserRole.ADMIN ? <AdminOrders /> : <Navigate to="/" />} />

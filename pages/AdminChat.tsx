@@ -15,6 +15,7 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
     const [newMessage, setNewMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
     const [loadingConvs, setLoadingConvs] = useState(true);
 
     const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -35,7 +36,20 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
 
         const unsubscribe = subscribeToMessages(selectedConvId, (msgs) => {
             setMessages(msgs);
-            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            setTimeout(() => {
+                const container = chatContainerRef.current;
+                const end = messagesEndRef.current;
+                if (end) {
+                    if (container) {
+                        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 250;
+                        if (isNearBottom) {
+                            end.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    } else {
+                        end.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }
+            }, 100);
         });
 
         setEditingMsgId(null);
@@ -186,7 +200,7 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-gray-50/30 no-scrollbar">
+                        <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-8 space-y-6 bg-gray-50/30 no-scrollbar">
                             {messages.map((msg) => {
                                 const isMe = !!msg.isAdmin; 
                                 const isEditing = editingMsgId === msg.id;

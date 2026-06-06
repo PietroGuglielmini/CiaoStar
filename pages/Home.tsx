@@ -18,6 +18,7 @@ const Home: React.FC = () => {
   const [sortBy, setSortBy] = useState<'featured' | 'recent' | 'popular'>('featured');
   const [globalDraft, setGlobalDraft] = useState<any>(null);
   const [globalDraftTime, setGlobalDraftTime] = useState('');
+  const talentPrefix = sessionStorage.getItem('talentSlugPrefix') || 'talent';
 
   useEffect(() => {
     const raw = localStorage.getItem('ciao_star_abandoned_cart');
@@ -136,7 +137,7 @@ const Home: React.FC = () => {
                 </div>
                 <div className="flex gap-2.5 shrink-0">
                     <a 
-                      href={`/talent/${globalDraft.talentId}`}
+                      href={`/${talentPrefix}/${globalDraft.talentId}`}
                       className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase px-5 py-3 rounded-xl shadow transition duration-250 shrink-0 select-none cursor-pointer"
                     >
                       Completa Ora
@@ -233,7 +234,7 @@ const Home: React.FC = () => {
                                     </div>
                                 </div>
                                 <a
-                                  href={`/talent/${talent.id}`}
+                                  href={`/${talentPrefix}/${talent.id}`}
                                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-all shadow-md active:scale-95"
                                 >
                                   Richiedi

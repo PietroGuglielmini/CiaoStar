@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { getAllUsersAdmin, createPreCreatedTalent, updateUserDisabledStatus, updateTalentCustomCommission } from '../services/dataService';
+import { getAllUsersAdmin, createPreCreatedTalent, updateUserDisabledStatus, updateTalentCustomCommission, createNotification } from '../services/dataService';
 import { 
     Users, Search, LogIn, Loader2, User as UserIcon, RefreshCw, Filter, 
-    ArrowUpDown, ShieldAlert, Star, Ban, CheckCircle
+    ArrowUpDown, ShieldAlert, Star, Ban, CheckCircle, Bell, AlertTriangle, Send
 } from 'lucide-react';
 
 interface AdminUsersProps {
@@ -24,6 +24,14 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
     const [creationSuccess, setCreationSuccess] = useState<string | null>(null);
     const [creationError, setCreationError] = useState<string | null>(null);
     const [showCreateForm, setShowCreateForm] = useState(false);
+
+    // Mass notification states
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [notifSubject, setNotifSubject] = useState('');
+    const [notifText, setNotifText] = useState('');
+    const [notifType, setNotifType] = useState<'SERVICE' | 'MARKETING'>('SERVICE');
+    const [sendingNotifs, setSendingNotifs] = useState(false);
+    const [showMassNotifForm, setShowMassNotifForm] = useState(false);
 
     const load = async () => {
         setLoading(true);
@@ -78,6 +86,45 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
     const handleImpersonationClick = (user: User) => {
         if (confirm(`Stai per accedere come ${user.name} (${user.role}). Confermi?`)) {
             onImpersonate(user);
+        }
+    };
+
+    const handleSendMassNotifications = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedUserIds.length === 0) {
+            alert("Seleziona almeno un utente.");
+            return;
+        }
+        if (!notifSubject.trim() || !notifText.trim()) {
+            alert("Inserisci titolo e messaggio della notifica.");
+            return;
+        }
+
+        setSendingNotifs(true);
+        try {
+            let count = 0;
+            // Send to each selected user sequentially (to avoid firestore burst limitations if severe, or simple loop)
+            for (const userId of selectedUserIds) {
+                await createNotification(
+                    userId,
+                    notifSubject.trim(),
+                    notifText.trim(),
+                    undefined,
+                    undefined,
+                    notifType
+                );
+                count++;
+            }
+            setNotifSubject('');
+            setNotifText('');
+            setSelectedUserIds([]);
+            setShowMassNotifForm(false);
+            alert(`Processo completato per i ${count} utenti selezionati! Se si tratta di comunicazioni marketing, gli utenti che hanno revocato il consenso sono stati saltati automaticamente.`);
+        } catch (err) {
+            console.error("Errore invio notifiche:", err);
+            alert("Errore durante l'invio delle notifiche massite.");
+        } finally {
+            setSendingNotifs(false);
         }
     };
 
@@ -224,12 +271,130 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
                 </div>
             </div>
 
+            {/* Mass Notifications Action Bar & Form */}
+            {selectedUserIds.length > 0 && (
+                <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white p-6 rounded-3xl shadow-xl mb-8 space-y-4 border border-indigo-500/20">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
+                                <Bell className="w-4 h-4 text-indigo-200" /> Pannello Notifiche Massive ({selectedUserIds.length} Selezionati)
+                            </h3>
+                            <p className="text-xs text-indigo-100 mt-1">
+                                Invia un avviso in-app ed email ai profili selezionati. L'algoritmo integrato gestisce automaticamente le preferenze GDPR.
+                            </p>
+                        </div>
+                        <button 
+                            onClick={() => setShowMassNotifForm(!showMassNotifForm)}
+                            className="bg-white hover:bg-slate-50 text-indigo-600 px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all shadow-sm cursor-pointer select-none"
+                        >
+                            {showMassNotifForm ? 'Chiudi Pannello' : 'Scrivi Messaggio'}
+                        </button>
+                    </div>
+
+                    {showMassNotifForm && (
+                        <form onSubmit={handleSendMassNotifications} className="pt-4 border-t border-indigo-500/50 space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">Titolo Notifica</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="Es. Aggiornamento dei Termini di Servizio"
+                                        className="w-full bg-indigo-700/50 border border-indigo-500 rounded-2xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-white transition-colors placeholder:text-indigo-300"
+                                        value={notifSubject}
+                                        onChange={e => setNotifSubject(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">Tipo di Comunicazione (GDPR)</label>
+                                    <div className="flex gap-4 p-1 bg-indigo-700/50 border border-indigo-500 rounded-2xl">
+                                        <button
+                                            type="button"
+                                            onClick={() => setNotifType('SERVICE')}
+                                            className={`flex-1 text-center py-2 rounded-xl text-xs font-bold transition-all ${notifType === 'SERVICE' ? 'bg-white text-indigo-950 font-black' : 'text-indigo-250 hover:text-white'}`}
+                                        >
+                                            SERVICE (Critica / Legale)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setNotifType('MARKETING')}
+                                            className={`flex-1 text-center py-2 rounded-xl text-xs font-bold transition-all ${notifType === 'MARKETING' ? 'bg-white text-indigo-950 font-black' : 'text-indigo-250 hover:text-white'}`}
+                                        >
+                                            MARKETING (Promozionale)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-indigo-200">Testo del Messaggio</label>
+                                <textarea 
+                                    rows={3}
+                                    placeholder="Scrivi il contenuto dell'avviso. Verrà visualizzato nella bacheca notifiche e recapitato via email."
+                                    className="w-full bg-indigo-700/50 border border-indigo-500 rounded-2xl px-4 py-3 text-sm font-semibold text-white focus:outline-none focus:border-white transition-colors placeholder:text-indigo-300"
+                                    value={notifText}
+                                    onChange={e => setNotifText(e.target.value)}
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex justify-between items-center pt-2">
+                                <div className="text-[10px] text-indigo-200 font-medium">
+                                    {notifType === 'SERVICE' ? (
+                                        <span className="flex items-center gap-1.5 text-amber-200">
+                                            <AlertTriangle className="w-3.5 h-3.5" />
+                                            Le comunicazioni 'SERVICE' sono obbligatorie e ignorano l'opt-out del fan.
+                                        </span>
+                                    ) : (
+                                        <span className="flex items-center gap-1.5 text-indigo-200">
+                                            <CheckCircle className="w-3.5 h-3.5 text-indigo-305" />
+                                            Le comunicazioni 'MARKETING' saltano automaticamente gli utenti che non hanno dato il consenso GDPR.
+                                        </span>
+                                    )}
+                                </div>
+                                <button 
+                                    type="submit"
+                                    disabled={sendingNotifs}
+                                    className="bg-emerald-500 hover:bg-emerald-600 font-extrabold uppercase text-xs tracking-wider text-white px-6 py-3 rounded-2xl transition-all shadow-md active:scale-95 flex items-center gap-2 select-none cursor-pointer border border-emerald-400/20 disabled:opacity-50"
+                                >
+                                    {sendingNotifs ? (
+                                        <>
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            <span>Invio in corso...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send className="w-3.5 h-3.5" />
+                                            <span>Invia a {selectedUserIds.length} Utenti</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            )}
+
             {/* Users Table */}
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto no-scrollbar">
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
+                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center w-12">
+                                    <input 
+                                        type="checkbox"
+                                        className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                        checked={filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u.id))}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedUserIds(filteredUsers.map(u => u.id));
+                                            } else {
+                                                setSelectedUserIds([]);
+                                            }
+                                        }}
+                                    />
+                                </th>
                                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Utente</th>
                                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Ruolo</th>
                                 <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Iscrizione</th>
@@ -241,13 +406,27 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
                         <tbody className="divide-y divide-gray-50">
                             {filteredUsers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="p-20 text-center text-slate-300 font-bold uppercase italic">
+                                    <td colSpan={7} className="p-20 text-center text-slate-300 font-bold uppercase italic">
                                         Nessun utente trovato con questi criteri.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredUsers.map(u => (
                                     <tr key={u.id} className="hover:bg-indigo-50/30 transition-colors">
+                                        <td className="p-6 text-center w-12 col-span-1">
+                                            <input 
+                                                type="checkbox"
+                                                className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                checked={selectedUserIds.includes(u.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedUserIds(prev => [...prev, u.id]);
+                                                    } else {
+                                                        setSelectedUserIds(prev => prev.filter(id => id !== u.id));
+                                                    }
+                                                }}
+                                            />
+                                        </td>
                                         <td className="p-6">
                                             <div className="flex items-center gap-4">
                                                 <div className="w-10 h-10 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-100">

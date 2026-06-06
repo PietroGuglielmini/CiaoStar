@@ -12,6 +12,7 @@ const TalentCard: React.FC<TalentCardProps> = ({ talent }) => {
   const navigate = useNavigate();
   const isAvailable = talent.isAvailable !== false;
   const [averageRating, setAverageRating] = useState<number | null>(null);
+  const prefix = sessionStorage.getItem('talentSlugPrefix') || 'talent';
 
   useEffect(() => {
     getReviewsForTalent(talent.id).then(list => {
@@ -34,7 +35,7 @@ const TalentCard: React.FC<TalentCardProps> = ({ talent }) => {
   return (
     <div 
       className="card-star group cursor-pointer h-full flex flex-col"
-      onClick={() => navigate(`/talent/${talent.id}`)}
+      onClick={() => navigate(`/${prefix}/${talent.id}`)}
     >
       <div className="relative aspect-[4/5] overflow-hidden">
         <img 

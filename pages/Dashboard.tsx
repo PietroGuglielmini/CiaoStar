@@ -782,6 +782,43 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
       setIsUploading(true);
       setUploadProgress(0);
+
+      // Esegui controlli tecnici prima del caricamento (Conformità Payout Sicuro)
+      const allowedExtensions = ['mp4', 'mov', 'avi', 'webm', 'mkv', 'qt', '3gp'];
+      const fileExt = uploadFile.name.split('.').pop()?.toLowerCase() || '';
+      const minSize = 500 * 1024; // 500 KB dimensione minima per garantire la qualità video
+
+      let validationFailed = false;
+      let errorMsg = '';
+
+      if (!allowedExtensions.includes(fileExt)) {
+          validationFailed = true;
+          errorMsg = "Estensione del file non valida. I formati supportati sono: MP4, MOV, AVI, WEBM, MKV.";
+      } else if (uploadFile.size < minSize) {
+          validationFailed = true;
+          errorMsg = `La dimensione del video è inferiore alla soglia minima di 500 KB (il file caricato è di ${(uploadFile.size / 1024).toFixed(1)} KB). Potrebbe essere vuoto o corrotto.`;
+      } else if (!uploadFile.type.startsWith('video/') && fileExt !== 'mov' && fileExt !== 'mkv') {
+          validationFailed = true;
+          errorMsg = "MIME-type del file non riconosciuto come video.";
+      }
+
+      if (validationFailed) {
+          try {
+              // Sposta lo stato dell'ordine in ACTION_REQUIRED per il talento
+              await updateRequestStatus(orderId, RequestStatus.ACTION_REQUIRED);
+              alert(`⚠️ VALIDAZIONE VIDEO FALLITA (Cloud Storage Secure Validation):\n\n- Errore: ${errorMsg}\n\nL'ordine è stato reimpostato sullo stato "AZIONE RICHIESTA". Carica un video valido per completare il payout.`);
+          } catch (err: any) {
+              console.error("Errore aggiornamento stato in ACTION_REQUIRED:", err);
+          } finally {
+              setIsUploading(false);
+              setUploadProgress(0);
+              setUploadingId(null);
+              setUploadFile(null);
+              refresh();
+          }
+          return;
+      }
+
       try {
           await uploadAndDeliverVideoResumable(uploadFile, orderId, qualityCheck, (pct) => {
               setUploadProgress(pct);

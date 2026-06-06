@@ -22,6 +22,7 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
   const [instructions, setInstructions] = useState('');
   const [occasion, setOccasion] = useState(OCCASIONS[0]);
   const [agreed, setAgreed] = useState(false);
+  const [withdrawalWaived, setWithdrawalWaived] = useState(false);
   const [allowPublicSample, setAllowPublicSample] = useState(true);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [publicSamples, setPublicSamples] = useState<any[]>([]);
@@ -148,7 +149,7 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     if (currentUser.role === UserRole.TALENT) {
         return;
     }
-    if (!agreed) return;
+    if (!agreed || !withdrawalWaived) return;
 
     setIsProcessingPayment(true);
     setPaymentStep('processing');
@@ -541,9 +542,19 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                                 </span>
                             </label>
 
+                            <label className="flex items-start gap-3 cursor-pointer group mt-2">
+                                <input type="checkbox" checked={withdrawalWaived} onChange={e => setWithdrawalWaived(e.target.checked)} className="sr-only" />
+                                <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all mt-0.5 ${withdrawalWaived ? 'bg-indigo-600 border-indigo-600' : 'border-gray-200 group-hover:border-indigo-300'}`}>
+                                    {withdrawalWaived && <CheckCircle className="w-4 h-4 text-white" />}
+                                </div>
+                                <span className="text-xs text-slate-500 font-bold leading-normal">
+                                    Accetto che l'esecuzione del servizio inizi immediatamente e rinuncio al mio diritto di recesso dal momento in cui il video mi viene recapitato (Art. 59, lett. c del Codice del Consumo italiano).
+                                </span>
+                            </label>
+
                             <button 
                                 type="submit"
-                                disabled={!agreed || currentUser?.role === UserRole.TALENT}
+                                disabled={!agreed || !withdrawalWaived || currentUser?.role === UserRole.TALENT}
                                 className="btn-primary w-full py-5 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Zap className="w-5 h-5 fill-current" />

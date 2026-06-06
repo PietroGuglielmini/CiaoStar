@@ -34,6 +34,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
         orderCompleted: true
     });
     const [marketingMilestones, setMarketingMilestones] = useState(true);
+    const [marketingEnabled, setMarketingEnabled] = useState(true);
     const [adminSettings, setAdminSettings] = useState<AdminSettings | null>(null);
     
     // Change Detection State
@@ -79,6 +80,8 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 };
                 setNotificationPrefs(mergedPrefs);
 
+                setMarketingEnabled(profileData.preferences?.marketingEnabled !== false);
+
                 // Cast to Talent safely
                 if (profileData.role === 'TALENT') {
                     const t = profileData as Talent;
@@ -123,7 +126,37 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                         fastDeliveryIncrease: initialFastIncrease,
                         responseTime: initialResponse,
                         notificationPrefs: mergedPrefs,
-                        marketingMilestones: t.marketing_milestones !== false
+                        marketingMilestones: t.marketing_milestones !== false,
+                        marketingEnabled: profileData.preferences?.marketingEnabled !== false
+                    });
+                } else {
+                    const t = profileData as any;
+                    setTalent(t);
+                    const initialName = t.name || '';
+                    if (t.avatarUrl) setAvatarPreview(t.avatarUrl);
+                    
+                    setDisplayName(initialName);
+                    setPrice(0);
+                    setBio('');
+                    setCategory('');
+                    setIsAvailable(true);
+                    setFastDeliveryEnabled(false);
+                    setFastDeliveryIncrease(20);
+                    setResponseTime(3);
+                    setMarketingMilestones(true);
+
+                    setInitialFormState({
+                        displayName: initialName,
+                        price: 0,
+                        bio: '',
+                        category: '',
+                        isAvailable: true,
+                        fastDeliveryEnabled: false,
+                        fastDeliveryIncrease: 20,
+                        responseTime: 3,
+                        notificationPrefs: mergedPrefs,
+                        marketingMilestones: true,
+                        marketingEnabled: profileData.preferences?.marketingEnabled !== false
                     });
                 }
             } catch (e) {
@@ -149,6 +182,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             fastDeliveryIncrease !== initialFormState.fastDeliveryIncrease ||
             responseTime !== initialFormState.responseTime ||
             marketingMilestones !== initialFormState.marketingMilestones ||
+            marketingEnabled !== initialFormState.marketingEnabled ||
             avatarFile !== null ||
             JSON.stringify(notificationPrefs) !== JSON.stringify(initialFormState.notificationPrefs);
 
@@ -156,7 +190,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
     }, [
         displayName, price, category, bio, isAvailable, 
         fastDeliveryEnabled, fastDeliveryIncrease, responseTime, 
-        marketingMilestones, avatarFile, notificationPrefs, initialFormState
+        marketingMilestones, marketingEnabled, avatarFile, notificationPrefs, initialFormState
     ]);
 
     const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,12 +283,14 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 return;
             }
 
-            // 2. Moderazione Biografia con Gemini
-            const bioCheck = await moderateText(bio, 'bio');
-            if (!bioCheck.safe) {
-                alert(`BIOGRAFIA NON VALIDA.\n\nIl testo viola le linee guida:\n${bioCheck.reason}`);
-                setSaving(false);
-                return;
+            // 2. Moderazione Biografia con Gemini (Solo se TALENT e biografia presente)
+            if (user.role === 'TALENT' && bio.trim()) {
+                const bioCheck = await moderateText(bio, 'bio');
+                if (!bioCheck.safe) {
+                    alert(`BIOGRAFIA NON VALIDA.\n\nIl testo viola le linee guida:\n${bioCheck.reason}`);
+                    setSaving(false);
+                    return;
+                }
             }
 
             // 3. Upload Avatar se cambiato
@@ -266,19 +302,27 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             }
 
             // 4. Update Firestore Profile
-            await updateTalentProfile(user.id, {
+            const updatePayload: any = {
                 name: displayName,
-                price: Number(price),
-                category,
-                bio,
-                isAvailable,
-                fastDeliveryEnabled,
-                fastDeliveryPriceIncrease: Number(fastDeliveryIncrease),
-                responseTimeDays: Number(responseTime),
                 avatarUrl: newAvatarUrl,
-                notificationPreferences: notificationPrefs,
-                marketing_milestones: marketingMilestones
-            });
+                preferences: {
+                    marketingEnabled: marketingEnabled
+                }
+            };
+
+            if (user.role === 'TALENT') {
+                updatePayload.price = Number(price);
+                updatePayload.category = category;
+                updatePayload.bio = bio;
+                updatePayload.isAvailable = isAvailable;
+                updatePayload.fastDeliveryEnabled = fastDeliveryEnabled;
+                updatePayload.fastDeliveryPriceIncrease = Number(fastDeliveryIncrease);
+                updatePayload.responseTimeDays = Number(responseTime);
+                updatePayload.notificationPreferences = notificationPrefs;
+                updatePayload.marketing_milestones = marketingMilestones;
+            }
+
+            await updateTalentProfile(user.id, updatePayload);
 
             // Update initial state to match current (saved) state
             setInitialFormState({
@@ -291,7 +335,8 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 fastDeliveryPriceIncrease: Number(fastDeliveryIncrease),
                 responseTime: Number(responseTime),
                 notificationPrefs,
-                marketingMilestones: marketingMilestones
+                marketingMilestones: marketingMilestones,
+                marketingEnabled: marketingEnabled
             });
             setAvatarFile(null); // Clear pending file
             setHasChanges(false);
@@ -307,7 +352,6 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
     };
 
     if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin text-slate-900 h-8 w-8" /></div>;
-    if (!talent) return <div className="p-12 text-center">Devi essere un Talent per accedere a questa pagina.</div>;
 
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -317,62 +361,64 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             <form onSubmit={handleSave} className="space-y-8">
                 
                 {/* Stripe Connect Integration */}
-                <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8">
-                    <h2 className="text-lg font-bold text-slate-900 mb-2 flex items-center">
-                        <CreditCard className="w-5 h-5 mr-3 text-indigo-600" />
-                        Metodo di Pagamento (Stripe Connect)
-                    </h2>
-                    <p className="text-xs text-slate-400 mb-6 uppercase font-bold tracking-wider">
-                        Ricevi l'80% di ogni ordine direttamente sul tuo conto corrente bancario o carta di credito
-                    </p>
+                {user.role === 'TALENT' && (
+                    <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8">
+                        <h2 className="text-lg font-bold text-slate-900 mb-2 flex items-center">
+                            <CreditCard className="w-5 h-5 mr-3 text-indigo-600" />
+                            Metodo di Pagamento (Stripe Connect)
+                        </h2>
+                        <p className="text-xs text-slate-400 mb-6 uppercase font-bold tracking-wider">
+                            Ricevi l'80% di ogni ordine direttamente sul tuo conto corrente bancario o carta di credito
+                        </p>
 
-                    {talent?.stripeAccountId ? (
-                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 flex items-start gap-4">
-                            <CheckCircle className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
-                            <div>
-                                <h4 className="text-sm font-black text-emerald-950 uppercase tracking-tight">Account Stripe Collegato</h4>
-                                <p className="text-xs text-emerald-700 font-medium mt-1 leading-relaxed">
-                                    Il tuo account Stripe Connect (<span className="font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded text-[10px]">{talent.stripeAccountId}</span>) è attivo e configurato per ricevere rimesse dirette (Split 80/20).
-                                </p>
+                        {talent?.stripeAccountId ? (
+                            <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 flex items-start gap-4">
+                                <CheckCircle className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-sm font-black text-emerald-950 uppercase tracking-tight">Account Stripe Collegato</h4>
+                                    <p className="text-xs text-emerald-700 font-medium mt-1 leading-relaxed">
+                                        Il tuo account Stripe Connect (<span className="font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded text-[10px]">{talent.stripeAccountId}</span>) è attivo e configurato per ricevere rimesse dirette (Split 80/20).
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleStripeOnboarding}
+                                        disabled={onboardingLoading}
+                                        className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-2 select-none cursor-pointer border border-emerald-500/20"
+                                    >
+                                        {onboardingLoading ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : "Gestisci o Aggiorna Account Stripe"}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-indigo-50/20 border border-indigo-100/50 rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                <div className="space-y-1">
+                                    <h4 className="text-sm font-black text-indigo-950 uppercase tracking-tight">Onboarding non completato</h4>
+                                    <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-md">
+                                        Per poter ricevere pagamenti dai fan, devi completare la procedura guidata di Stripe Connect e attivare il tuo conto Express.
+                                    </p>
+                                </div>
                                 <button
                                     type="button"
                                     onClick={handleStripeOnboarding}
                                     disabled={onboardingLoading}
-                                    className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-sm flex items-center justify-center gap-2 select-none cursor-pointer border border-emerald-500/20"
+                                    className="w-full md:w-auto px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-md uppercase tracking-widest flex items-center justify-center gap-2 select-none cursor-pointer border border-indigo-500/35 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
                                 >
-                                    {onboardingLoading ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : "Gestisci o Aggiorna Account Stripe"}
+                                    {onboardingLoading ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin text-white" />
+                                            <span>Inizializzazione...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CreditCard className="w-4 h-4 pointer-events-none" />
+                                            <span>Collega Stripe Connect</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="bg-indigo-50/20 border border-indigo-100/50 rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                            <div className="space-y-1">
-                                <h4 className="text-sm font-black text-indigo-950 uppercase tracking-tight">Onboarding non completato</h4>
-                                <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-md">
-                                    Per poter ricevere pagamenti dai fan, devi completare la procedura guidata di Stripe Connect e attivare il tuo conto Express.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleStripeOnboarding}
-                                disabled={onboardingLoading}
-                                className="w-full md:w-auto px-6 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-2xl shadow-md uppercase tracking-widest flex items-center justify-center gap-2 select-none cursor-pointer border border-indigo-500/35 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
-                            >
-                                {onboardingLoading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin text-white" />
-                                        <span>Inizializzazione...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <CreditCard className="w-4 h-4 pointer-events-none" />
-                                        <span>Collega Stripe Connect</span>
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
 
                 {/* 0. Avatar & Bio */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -401,293 +447,332 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                 onChange={handleAvatarChange}
                             />
                         </div>
-                        <div className="flex-1 w-full space-y-4">
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Nome Visualizzato</label>
-                                <input
-                                    type="text"
-                                    value={displayName}
-                                    onChange={(e) => setDisplayName(e.target.value)}
-                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
-                                    placeholder="Es. Mago Merlino"
-                                    maxLength={30}
-                                />
-                            </div>
+                         <div className="flex-1 w-full space-y-4">
+                             <div>
+                                 <label className="block text-sm font-semibold text-slate-700 mb-2">Nome Visualizzato</label>
+                                 <input
+                                     type="text"
+                                     value={displayName}
+                                     onChange={(e) => setDisplayName(e.target.value)}
+                                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
+                                     placeholder="Es. Mago Merlino"
+                                     maxLength={30}
+                                 />
+                             </div>
 
-                            <div className="relative">
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                    Biografia
-                                </label>
-                                <textarea
-                                    rows={4}
-                                    value={bio}
-                                    onChange={(e) => setBio(e.target.value)}
-                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
-                                    placeholder="Racconta chi sei ai tuoi fan..."
-                                />
-                                <p className="text-xs text-gray-400 mt-2">
-                                    La tua bio viene analizzata dall'AI per garantire il rispetto delle linee guida.
-                                </p>
-                            </div>
-                        </div>
+                             {user.role === 'TALENT' && (
+                                 <div className="relative">
+                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
+                                         Biografia
+                                     </label>
+                                     <textarea
+                                         rows={4}
+                                         value={bio}
+                                         onChange={(e) => setBio(e.target.value)}
+                                         className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
+                                         placeholder="Racconta chi sei ai tuoi fan..."
+                                     />
+                                     <p className="text-xs text-gray-400 mt-2">
+                                         La tua bio viene analizzata dall'AI per garantire il rispetto delle linee guida.
+                                     </p>
+                                 </div>
+                             )}
+                         </div>
                     </div>
                 </div>
 
                 {/* Video di Invito per la Bacheca (Opzionale) */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-bold text-slate-900 mb-2 flex items-center">
-                        <Video className="w-5 h-5 mr-2 text-indigo-500" /> Video di Invito / Benvenuto (Opzionale)
-                    </h2>
-                    <p className="text-xs text-gray-500 mb-6">
-                        Carica un breve video messaggio pubblico (max 50MB, .mp4, .webm, .mov) per invitare e incoraggiare i fan a farti richieste! Comparirà sulla bacheca e sulla pagina pubblica del tuo profilo.
-                    </p>
+                {user.role === 'TALENT' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h2 className="text-lg font-bold text-slate-900 mb-2 flex items-center">
+                            <Video className="w-5 h-5 mr-2 text-indigo-500" /> Video di Invito / Benvenuto (Opzionale)
+                        </h2>
+                        <p className="text-xs text-gray-500 mb-6">
+                            Carica un breve video messaggio pubblico (max 50MB, .mp4, .webm, .mov) per invitare e incoraggiare i fan a farti richieste! Comparirà sulla bacheca e sulla pagina pubblica del tuo profilo.
+                        </p>
 
-                    <div className="space-y-4">
-                        {introVideoUrl ? (
-                            <div className="max-w-md rounded-xl overflow-hidden border border-gray-200 shadow-inner bg-slate-900 relative aspect-video">
-                                <video 
-                                    src={introVideoUrl} 
-                                    controls 
-                                    className="w-full h-full object-cover"
-                                />
-                            </div>
-                        ) : (
-                            <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center bg-gray-50">
-                                <Video className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                                <p className="text-sm font-semibold text-slate-600">Nessun video di invito caricato</p>
-                                <p className="text-xs text-slate-400 mt-1">I fan vedranno solo i dettagli testuali e l'avatar.</p>
-                            </div>
-                        )}
-
-                        <div className="flex items-center gap-4">
-                            <label className="relative cursor-pointer border rounded-lg px-4 py-2 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-gray-50 transition-all flex items-center justify-center gap-2 select-none">
-                                {uploadingIntro ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin text-slate-900" />
-                                        <span>Caricamento...</span>
-                                    </>
-                                ) : (
-                                    <span>{introVideoUrl ? "Sostituisci Video" : "Seleziona e Carica Video"}</span>
-                                )}
-                                <input 
-                                    type="file" 
-                                    disabled={uploadingIntro}
-                                    className="sr-only" 
-                                    accept="video/*"
-                                    onChange={handleIntroVideoChange}
-                                />
-                            </label>
-                            {introVideoUrl && (
-                                <button
-                                    type="button"
-                                    onClick={async () => {
-                                        if (window.confirm("Sei sicuro di voler eliminare il tuo video di benvenuto?")) {
-                                            await updateTalentProfile(user.id, { introVideoUrl: null });
-                                            setIntroVideoUrl('');
-                                        }
-                                    }}
-                                    className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors"
-                                >
-                                    Rimuovi video
-                                </button>
+                        <div className="space-y-4">
+                            {introVideoUrl ? (
+                                <div className="max-w-md rounded-xl overflow-hidden border border-gray-200 shadow-inner bg-slate-900 relative aspect-video">
+                                    <video 
+                                        src={introVideoUrl} 
+                                        controls 
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                            ) : (
+                                <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center bg-gray-50">
+                                    <Video className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                                    <p className="text-sm font-semibold text-slate-600">Nessun video di invito caricato</p>
+                                    <p className="text-xs text-slate-400 mt-1">I fan vedranno solo i dettagli testuali e l'avatar.</p>
+                                </div>
                             )}
+
+                            <div className="flex items-center gap-4">
+                                <label className="relative cursor-pointer border rounded-lg px-4 py-2 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-gray-50 transition-all flex items-center justify-center gap-2 select-none">
+                                    {uploadingIntro ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin text-slate-900" />
+                                            <span>Caricamento...</span>
+                                        </>
+                                    ) : (
+                                        <span>{introVideoUrl ? "Sostituisci Video" : "Seleziona e Carica Video"}</span>
+                                    )}
+                                    <input 
+                                        type="file" 
+                                        disabled={uploadingIntro}
+                                        className="sr-only" 
+                                        accept="video/*"
+                                        onChange={handleIntroVideoChange}
+                                    />
+                                </label>
+                                {introVideoUrl && (
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (window.confirm("Sei sicuro di voler eliminare il tuo video di benvenuto?")) {
+                                                await updateTalentProfile(user.id, { introVideoUrl: null });
+                                                setIntroVideoUrl('');
+                                            }
+                                        }}
+                                        className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors"
+                                    >
+                                        Rimuovi video
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
                 {/* 1. Disponibilità */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900">Stato Disponibilità</h2>
-                            <p className="text-sm text-gray-500 mt-1">
-                                {isAvailable ? "Il tuo profilo è visibile e puoi ricevere ordini." : "Il tuo profilo appare come 'Non disponibile'. I fan non possono prenotare."}
-                            </p>
+                {user.role === 'TALENT' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900">Stato Disponibilità</h2>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {isAvailable ? "Il tuo profilo è visibile e puoi ricevere ordini." : "Il tuo profilo appare come 'Non disponibile'. I fan non possono prenotare."}
+                                </p>
+                            </div>
+                            <div className="flex items-center">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer"
+                                        checked={isAvailable}
+                                        onChange={(e) => setIsAvailable(e.target.checked)}
+                                    />
+                                    <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
                         </div>
-                        <div className="flex items-center">
+                    </div>
+                )}
+
+                {/* 2. Profilo Base & Prezzi */}
+                {user.role === 'TALENT' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center">
+                            <DollarSign className="w-5 h-5 mr-2" /> Dettagli Offerta
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Categoria</label>
+                                <div className="relative">
+                                    <Tag className="absolute top-3 left-3 w-4 h-4 text-gray-400 z-10" />
+                                    <ChevronDown className="absolute top-3.5 right-3 w-4 h-4 text-gray-400 z-10 pointer-events-none" />
+                                    <select 
+                                        value={category}
+                                        onChange={(e) => setCategory(e.target.value)}
+                                        className="block w-full pl-10 pr-10 rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border bg-white appearance-none relative cursor-pointer hover:border-gray-400 transition-colors"
+                                        disabled={categories.length === 0}
+                                    >
+                                        {categories.length === 0 ? (
+                                            <option>Caricamento categorie...</option>
+                                        ) : (
+                                            categories.map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
+                                            ))
+                                        )}
+                                    </select>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-1">Seleziona una categoria dal database.</p>
+                            </div>
+                            <div>
+                                 {/* Empty Spacer */}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-2">Prezzo per video (€)</label>
+                                <input 
+                                    type="number" 
+                                    min="1"
+                                    value={price}
+                                    onChange={(e) => setPrice(Number(e.target.value))}
+                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. Flash Delivery 24h */}
+                {user.role === 'TALENT' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <h2 className="text-lg font-bold text-slate-900 flex items-center">
+                                    <Zap className="w-5 h-5 mr-2 text-amber-500 fill-current" /> Consegna Flash 24h
+                                </h2>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Offri la possibilità di ricevere il video in 24 ore a un prezzo maggiorato.
+                                </p>
+                            </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input 
                                     type="checkbox" 
                                     className="sr-only peer"
-                                    checked={isAvailable}
-                                    onChange={(e) => setIsAvailable(e.target.checked)}
+                                    checked={fastDeliveryEnabled}
+                                    onChange={(e) => setFastDeliveryEnabled(e.target.checked)}
                                 />
-                                <div className="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                            </label>
+                        </div>
+
+                        {fastDeliveryEnabled && (
+                            <div className="bg-amber-50 p-4 rounded-lg border border-amber-100 animate-fadeIn">
+                                <label className="block text-sm font-bold text-slate-800 mb-3">Sovrapprezzo per consegna 24h</label>
+                                <div className="flex space-x-4">
+                                    {[20, 30, 50].map((pct) => (
+                                        <label key={pct} className={`flex-1 border rounded-lg p-3 cursor-pointer transition-all ${fastDeliveryIncrease === pct ? 'bg-white border-amber-500 shadow-md ring-1 ring-amber-500' : 'bg-white border-gray-200 hover:border-amber-300'}`}>
+                                            <div className="flex items-center">
+                                                <input 
+                                                    type="radio" 
+                                                    name="increase" 
+                                                    value={pct} 
+                                                    checked={fastDeliveryIncrease === pct}
+                                                    onChange={() => setFastDeliveryIncrease(pct)}
+                                                    className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300"
+                                                />
+                                                <span className="ml-2 font-bold text-slate-900">+{pct}%</span>
+                                            </div>
+                                            <div className="mt-1 text-xs text-gray-500 ml-6">
+                                                Prezzo finale: <span className="font-semibold text-slate-900">€{(price * (1 + pct/100)).toFixed(2)}</span>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="flex items-center mt-4 text-xs text-amber-800">
+                                    <AlertTriangle className="w-4 h-4 mr-1" />
+                                    Importante: Se attivi questa opzione, devi impegnarti a caricare il video entro 24h dall'accettazione.
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 4. Preferenze Notifiche */}
+                {user.role === 'TALENT' && (
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h2 className="text-lg font-bold text-slate-900 flex items-center mb-1">
+                            <Bell className="w-5 h-5 mr-2 text-indigo-500" /> Preferenze Notifiche
+                        </h2>
+                        <p className="text-sm text-gray-500 mb-6 font-semibold">
+                            Personalizza quali notifiche vuoi ricevere via email e in-app. Nota: alcune notifiche critiche impostate dall'amministratore sono non-negoziabili.
+                        </p>
+
+                        <div className="space-y-3.5">
+                            {[
+                                { key: 'orderCreated', label: "Nuova Richiesta d'Ordine", desc: 'Notifica alla ricezione di un nuovo ordine.' },
+                                { key: 'orderAccepted', label: 'Ordine Accettato', desc: 'Notifica quando la star accetta la richiesta.' },
+                                { key: 'orderRejected', label: 'Ordine Rifiutato', desc: 'Notifica in caso di rifiuto da parte della star.' },
+                                { key: 'videoUploaded', label: 'Video Caricato & Consegnato', desc: 'Notifica quando viene aggiunto il video messaggio.' },
+                                { key: 'disputeOpened', label: 'Disputa Aperta', desc: 'Notifica per l\'apertura di una contestazione.' },
+                                { key: 'disputeResolved', label: 'Disputa Risolta dallo Staff', desc: 'Notifica con l\'esito della risoluzione della disputa.' },
+                                { key: 'orderCompleted', label: 'Ordine Completato Definitivamente', desc: 'Notifica quando il Fan accetta definitivamente il video.' }
+                            ].map((notifOption) => {
+                                const isGlobalEnabled = adminSettings?.enabledNotifications?.[notifOption.key as keyof InAppNotificationSettings] !== false;
+                                const isNonNegotiable = adminSettings?.nonNegotiableNotifications?.[notifOption.key as keyof InAppNotificationSettings] === true;
+                                
+                                // Se non è abilitato globalmente dall'admin, non lo mostriamo
+                                if (!isGlobalEnabled) return null;
+
+                                const isChecked = isNonNegotiable ? true : (notificationPrefs[notifOption.key] !== false);
+
+                                return (
+                                    <div key={notifOption.key} className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50/50">
+                                        <div className="flex-1">
+                                            <p className="text-xs font-black text-slate-800 uppercase tracking-tight">
+                                                {notifOption.label}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 font-bold mt-0.5 leading-normal">
+                                                {notifOption.desc}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            {isNonNegotiable ? (
+                                                <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-md">Obbligatoria</span>
+                                            ) : (
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="h-4 w-4 text-indigo-600 rounded border-slate-200 focus:ring-indigo-500 cursor-pointer"
+                                                    checked={isChecked}
+                                                    onChange={e => {
+                                                        setNotificationPrefs({
+                                                            ...notificationPrefs,
+                                                            [notifOption.key]: e.target.checked
+                                                        });
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* GDPR Marketing Milestones Opt-Out Checkbox */}
+                        <div className="mt-6 pt-6 border-t border-slate-100">
+                            <label className="flex items-start gap-3 cursor-pointer p-4 rounded-xl border border-amber-100 bg-amber-50/50">
+                                <input 
+                                    type="checkbox" 
+                                    className="mt-0.5 h-4 w-4 text-indigo-600 rounded border-slate-200 focus:ring-indigo-500 cursor-pointer"
+                                    checked={marketingMilestones}
+                                    onChange={e => setMarketingMilestones(e.target.checked)}
+                                />
+                                <div>
+                                    <span className="block text-xs font-extrabold text-slate-850 uppercase tracking-tight">Notifiche celebrate sui traguardi (GDPR Opt-Out)</span>
+                                    <span className="block text-[10px] text-slate-500 font-bold leading-normal mt-0.5">
+                                        Consenti alla piattaforma di inviarti notifiche celebrative in-app ed email quando il tuo profilo raggiunge milestons di visualizzazioni o vendite tracciate.
+                                    </span>
+                                </div>
                             </label>
                         </div>
                     </div>
-                </div>
+                )}
 
-                {/* 2. Profilo Base & Prezzi */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center">
-                        <DollarSign className="w-5 h-5 mr-2" /> Dettagli Offerta
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Categoria</label>
-                            <div className="relative">
-                                <Tag className="absolute top-3 left-3 w-4 h-4 text-gray-400 z-10" />
-                                <ChevronDown className="absolute top-3.5 right-3 w-4 h-4 text-gray-400 z-10 pointer-events-none" />
-                                <select 
-                                    value={category}
-                                    onChange={(e) => setCategory(e.target.value)}
-                                    className="block w-full pl-10 pr-10 rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border bg-white appearance-none relative cursor-pointer hover:border-gray-400 transition-colors"
-                                    disabled={categories.length === 0}
-                                >
-                                    {categories.length === 0 ? (
-                                        <option>Caricamento categorie...</option>
-                                    ) : (
-                                        categories.map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
-                                        ))
-                                    )}
-                                </select>
-                            </div>
-                            <p className="text-xs text-gray-400 mt-1">Seleziona una categoria dal database.</p>
-                        </div>
-                        <div>
-                             {/* Empty Spacer */}
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-semibold text-slate-700 mb-2">Prezzo per video (€)</label>
-                            <input 
-                                type="number" 
-                                min="1"
-                                value={price}
-                                onChange={(e) => setPrice(Number(e.target.value))}
-                                className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* 3. Flash Delivery 24h */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900 flex items-center">
-                                <Zap className="w-5 h-5 mr-2 text-amber-500 fill-current" /> Consegna Flash 24h
-                            </h2>
-                            <p className="text-sm text-gray-500 mt-1">
-                                Offri la possibilità di ricevere il video in 24 ore a un prezzo maggiorato.
-                            </p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                className="sr-only peer"
-                                checked={fastDeliveryEnabled}
-                                onChange={(e) => setFastDeliveryEnabled(e.target.checked)}
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                        </label>
-                    </div>
-
-                    {fastDeliveryEnabled && (
-                        <div className="bg-amber-50 p-4 rounded-lg border border-amber-100 animate-fadeIn">
-                            <label className="block text-sm font-bold text-slate-800 mb-3">Sovrapprezzo per consegna 24h</label>
-                            <div className="flex space-x-4">
-                                {[20, 30, 50].map((pct) => (
-                                    <label key={pct} className={`flex-1 border rounded-lg p-3 cursor-pointer transition-all ${fastDeliveryIncrease === pct ? 'bg-white border-amber-500 shadow-md ring-1 ring-amber-500' : 'bg-white border-gray-200 hover:border-amber-300'}`}>
-                                        <div className="flex items-center">
-                                            <input 
-                                                type="radio" 
-                                                name="increase" 
-                                                value={pct} 
-                                                checked={fastDeliveryIncrease === pct}
-                                                onChange={() => setFastDeliveryIncrease(pct)}
-                                                className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300"
-                                            />
-                                            <span className="ml-2 font-bold text-slate-900">+{pct}%</span>
-                                        </div>
-                                        <div className="mt-1 text-xs text-gray-500 ml-6">
-                                            Prezzo finale: <span className="font-semibold text-slate-900">€{(price * (1 + pct/100)).toFixed(2)}</span>
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
-                            <div className="flex items-center mt-4 text-xs text-amber-800">
-                                <AlertTriangle className="w-4 h-4 mr-1" />
-                                Importante: Se attivi questa opzione, devi impegnarti a caricare il video entro 24h dall'accettazione.
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* 4. Preferenze Notifiche */}
+                {/* 5. Consensi Legali & GDPR per tutti */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                     <h2 className="text-lg font-bold text-slate-900 flex items-center mb-1">
-                        <Bell className="w-5 h-5 mr-2 text-indigo-500" /> Preferenze Notifiche
+                        <CheckCircle className="w-5 h-5 mr-2 text-indigo-500" /> Consensi GDPR & Comunicazioni
                     </h2>
                     <p className="text-sm text-gray-500 mb-6 font-semibold">
-                        Personalizza quali notifiche vuoi ricevere via email e in-app. Nota: alcune notifiche critiche impostate dall'amministratore sono non-negoziabili.
+                        Gestisci i tuoi consensi sul trattamento dei dati e sulle comunicazioni inviate dalla piattaforma.
                     </p>
 
-                    <div className="space-y-3.5">
-                        {[
-                            { key: 'orderCreated', label: "Nuova Richiesta d'Ordine", desc: 'Notifica alla ricezione di un nuovo ordine.' },
-                            { key: 'orderAccepted', label: 'Ordine Accettato', desc: 'Notifica quando la star accetta la richiesta.' },
-                            { key: 'orderRejected', label: 'Ordine Rifiutato', desc: 'Notifica in caso di rifiuto da parte della star.' },
-                            { key: 'videoUploaded', label: 'Video Caricato & Consegnato', desc: 'Notifica quando viene aggiunto il video messaggio.' },
-                            { key: 'disputeOpened', label: 'Disputa Aperta', desc: 'Notifica per l\'apertura di una contestazione.' },
-                            { key: 'disputeResolved', label: 'Disputa Risolta dallo Staff', desc: 'Notifica con l\'esito della risoluzione della disputa.' },
-                            { key: 'orderCompleted', label: 'Ordine Completato Definitivamente', desc: 'Notifica quando il Fan accetta definitivamente il video.' }
-                        ].map((notifOption) => {
-                            const isGlobalEnabled = adminSettings?.enabledNotifications?.[notifOption.key as keyof InAppNotificationSettings] !== false;
-                            const isNonNegotiable = adminSettings?.nonNegotiableNotifications?.[notifOption.key as keyof InAppNotificationSettings] === true;
-                            
-                            // Se non è abilitato globalmente dall'admin, non lo mostriamo
-                            if (!isGlobalEnabled) return null;
-
-                            const isChecked = isNonNegotiable ? true : (notificationPrefs[notifOption.key] !== false);
-
-                            return (
-                                <div key={notifOption.key} className="flex items-center justify-between gap-4 p-4 rounded-xl border border-slate-100 bg-slate-50/50">
-                                    <div className="flex-1">
-                                        <p className="text-xs font-black text-slate-800 uppercase tracking-tight">
-                                            {notifOption.label}
-                                        </p>
-                                        <p className="text-[10px] text-slate-400 font-bold mt-0.5 leading-normal">
-                                            {notifOption.desc}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        {isNonNegotiable ? (
-                                            <span className="text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-md">Obbligatoria</span>
-                                        ) : (
-                                            <input 
-                                                type="checkbox" 
-                                                className="h-4 w-4 text-indigo-600 rounded border-slate-200 focus:ring-indigo-500 cursor-pointer"
-                                                checked={isChecked}
-                                                onChange={e => {
-                                                    setNotificationPrefs({
-                                                        ...notificationPrefs,
-                                                        [notifOption.key]: e.target.checked
-                                                    });
-                                                }}
-                                            />
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* GDPR Marketing Milestones Opt-Out Checkbox */}
-                    <div className="mt-6 pt-6 border-t border-slate-100">
-                        <label className="flex items-start gap-3 cursor-pointer p-4 rounded-xl border border-amber-100 bg-amber-50/50">
+                    <div className="space-y-4">
+                        <label className="flex items-start gap-3 cursor-pointer p-4 rounded-xl border border-slate-100 bg-slate-50/50">
                             <input 
                                 type="checkbox" 
                                 className="mt-0.5 h-4 w-4 text-indigo-600 rounded border-slate-200 focus:ring-indigo-500 cursor-pointer"
-                                checked={marketingMilestones}
-                                onChange={e => setMarketingMilestones(e.target.checked)}
+                                checked={marketingEnabled}
+                                onChange={e => setMarketingEnabled(e.target.checked)}
                             />
                             <div>
-                                <span className="block text-xs font-extrabold text-slate-850 uppercase tracking-tight">Notifiche celebrate sui traguardi (GDPR Opt-Out)</span>
-                                <span className="block text-[10px] text-slate-500 font-bold leading-normal mt-0.5">
-                                    Consenti alla piattaforma di inviarti notifiche celebrative in-app ed email quando il tuo profilo raggiunge milestons di visualizzazioni o vendite tracciate.
+                                <span className="block text-xs font-extrabold text-slate-800 uppercase tracking-tight">Comunicazioni di Marketing (GDPR Consent)</span>
+                                <span className="block text-[10px] text-slate-400 font-bold leading-normal mt-0.5">
+                                    Consento al trattamento dei dati personali per l'invio di newsletter, offerte speciali, sondaggi e comunicazioni commerciali da parte di CiaoStar. Ti ricordiamo che puoi revocare questo consenso in qualsiasi momento direttamente da questa pagina.
                                 </span>
                             </div>
                         </label>

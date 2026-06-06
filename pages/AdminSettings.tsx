@@ -1106,7 +1106,21 @@ const AdminSettings: React.FC = () => {
                                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
                                     value={settings?.cartExpiryHours ?? 48}
                                     onChange={e => setSettings({...settings!, cartExpiryHours: Number(e.target.value) || 48})}
+                                // />
                                 />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Prefisso Slug Personali Star (default: "talent")</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="es. talent, star, celeb, vip"
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                    value={settings?.talentSlugPrefix ?? 'talent'}
+                                    onChange={e => setSettings({...settings!, talentSlugPrefix: e.target.value.trim().toLowerCase() || 'talent'})}
+                                />
+                                <p className="text-[9px] text-slate-400 font-semibold leading-relaxed mt-1">
+                                    Modifica l'alberatura degli URL dinamici per i profili delle Star (es. /talent/rossi diventerebbe /star/rossi se imposti "star").
+                                </p>
                             </div>
                         </div>
                     </div>

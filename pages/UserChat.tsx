@@ -20,6 +20,7 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
     const [conversationInfo, setConversationInfo] = useState<Conversation | null>(null);
     const [loading, setLoading] = useState(true);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
 
     const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
     const [editText, setEditText] = useState('');
@@ -28,7 +29,20 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
         const unsubscribeMsgs = subscribeToMessages(user.id, (msgs) => {
             setMessages(msgs);
             setLoading(false);
-            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            setTimeout(() => {
+                const container = chatContainerRef.current;
+                const end = messagesEndRef.current;
+                if (end) {
+                    if (container) {
+                        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 250;
+                        if (isNearBottom) {
+                            end.scrollIntoView({ behavior: 'smooth' });
+                        }
+                    } else {
+                        end.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }
+            }, 100);
         });
 
         const unsubscribeConv = subscribeToMyConversation(user.id, (conv) => {
@@ -104,7 +118,7 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
                 </div>
             </div>
 
-            <div className="flex-1 bg-gray-50/50 overflow-y-auto p-6 space-y-6 border-l border-r border-gray-100 no-scrollbar">
+            <div ref={chatContainerRef} className="flex-1 bg-gray-50/50 overflow-y-auto p-6 space-y-6 border-l border-r border-gray-100 no-scrollbar">
                 {loading ? (
                     <div className="flex flex-col items-center justify-center pt-20 gap-4">
                         <Loader2 className="animate-spin text-indigo-600 h-8 w-8" />

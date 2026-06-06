@@ -18,6 +18,7 @@ export enum RequestStatus {
   IN_REVIEW = 'IN_REVIEW',
   DISPUTE_OPEN = 'DISPUTE_OPEN',
   CORRECTION_NEEDED = 'CORRECTION_NEEDED',
+  ACTION_REQUIRED = 'ACTION_REQUIRED',
   REJECTED = 'REJECTED'
 }
 
@@ -89,6 +90,7 @@ export interface AdminSettings {
   socialLinks?: string[];
   viewMilestones?: number[];
   cartExpiryHours?: number;
+  talentSlugPrefix?: string;
 }
 
 export interface User {
@@ -116,6 +118,14 @@ export interface User {
   completedOrdersCount?: number;
   profileViews?: number;
   impressionsCount?: number;
+  chatEnabled?: boolean;
+  banReason?: string;
+  unbanRequestText?: string;
+  unbanRequestStatus?: 'NONE' | 'PENDING' | 'REJECTED';
+  unbanRequestTimestamp?: string;
+  preferences?: {
+    marketingEnabled: boolean;
+  };
 }
 
 export interface Talent extends User {
@@ -228,6 +238,7 @@ export interface InAppNotification {
   orderId?: string;
   createdAt: string;
   read: boolean;
+  type?: 'SERVICE' | 'MARKETING';
 }
 
 export interface EmailSettings {

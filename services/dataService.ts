@@ -219,6 +219,34 @@ export const updateVerificationStatus = async (userId: string, status: Verificat
     });
 };
 
+export const updateUserChatStatus = async (userId: string, chatEnabled: boolean, banReason?: string) => {
+    await updateDoc(doc(db, 'users', userId), { chatEnabled, banReason: banReason || "" });
+};
+
+export const submitUnbanRequest = async (userId: string, requestText: string) => {
+    await updateDoc(doc(db, 'users', userId), {
+        unbanRequestText: requestText,
+        unbanRequestStatus: 'PENDING',
+        unbanRequestTimestamp: new Date().toISOString()
+    });
+};
+
+export const resolveUnbanRequest = async (userId: string, action: 'APPROVE' | 'REJECT') => {
+    if (action === 'APPROVE') {
+        await updateDoc(doc(db, 'users', userId), {
+            chatEnabled: true,
+            banReason: "",
+            unbanRequestStatus: 'NONE',
+            unbanRequestText: ""
+        });
+    } else {
+        await updateDoc(doc(db, 'users', userId), {
+            unbanRequestStatus: 'REJECTED',
+            unbanRequestText: ""
+        });
+    }
+};
+
 export const uploadIntroVideo = async (file: File, userId: string): Promise<string> => {
     const settings = await getAdminSettings();
     
@@ -375,10 +403,21 @@ export const createNotification = async (
     title: string,
     message: string,
     orderId?: string,
-    type?: NotificationType
+    type?: NotificationType,
+    gdprType?: 'SERVICE' | 'MARKETING'
 ) => {
     try {
         let recipientUser: User | null = null;
+        
+        // GDPR check
+        if (gdprType === 'MARKETING' && recipientId !== 'ADMIN') {
+            recipientUser = await getUserById(recipientId);
+            if (recipientUser && recipientUser.preferences && recipientUser.preferences.marketingEnabled === false) {
+                console.log(`L'utente ${recipientId} ha revocato il consenso marketing (GDPR). Notifica di marketing annullata.`);
+                return;
+            }
+        }
+
         if (type) {
             const settings = await getAdminSettings();
             const config = settings.enabledNotifications;
@@ -389,7 +428,9 @@ export const createNotification = async (
 
             const isNonNegotiable = settings.nonNegotiableNotifications?.[type] === true;
             if (!isNonNegotiable && recipientId !== 'ADMIN') {
-                recipientUser = await getUserById(recipientId);
+                if (!recipientUser) {
+                    recipientUser = await getUserById(recipientId);
+                }
                 if (recipientUser) {
                     const userPrefs = recipientUser.notificationPreferences;
                     if (userPrefs && userPrefs[type] === false) {
@@ -406,7 +447,8 @@ export const createNotification = async (
             message,
             orderId: orderId || null,
             createdAt: new Date().toISOString(),
-            read: false
+            read: false,
+            type: gdprType || 'SERVICE'
         });
 
         // Invio e-mail simulata

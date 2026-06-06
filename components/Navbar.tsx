@@ -34,6 +34,16 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
+  // Tab alert per le notifiche non lette
+  useEffect(() => {
+    const titleBase = settings?.seoDefaultTitle || "CiaoStar - Video messaggi personalizzati dalle tue star preferite";
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) Nuova Notifica | ${titleBase}`;
+    } else {
+      document.title = titleBase;
+    }
+  }, [unreadCount, settings]);
+
   return (
     <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
