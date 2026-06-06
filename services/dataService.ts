@@ -757,7 +757,7 @@ export const uploadVideo = async (file: File, requestId: string, qualityCheck: V
     // 4. Aggiornamento dell'ordine
     await updateDoc(orderRef, { 
         videoUrl: url, 
-        status: RequestStatus.COMPLETED,
+        status: RequestStatus.DELIVERED,
         updatedAt: new Date().toISOString(),
         deliveredAt: new Date().toISOString(),
         talentQualityCheck: qualityCheck,
@@ -833,7 +833,7 @@ export const deliverVideo = async (requestId: string, qualityCheck: VideoRequest
     };
 
     await updateDoc(orderRef, {
-        status: RequestStatus.COMPLETED,
+        status: RequestStatus.DELIVERED,
         updatedAt: new Date().toISOString(),
         deliveredAt: new Date().toISOString(),
         talentQualityCheck: qualityCheck,
@@ -1466,6 +1466,34 @@ export const checkAndApplyAutoDeletion = async (orders: VideoRequest[]): Promise
                 }
             }
 
+            // B3) Check DELIVERED -> Auto-complete if 48 hours elapsed with no dispute
+            if (order.status === RequestStatus.DELIVERED) {
+                const baseTimeStr = order.deliveredAt || order.updatedAt || order.createdAt;
+                const ageMs = now - new Date(baseTimeStr).getTime();
+                const disputeHours = settings.disputeWindowHours || 48;
+                const limitMs = disputeHours * 60 * 60 * 1000;
+                if (ageMs > limitMs) {
+                    try {
+                        const orderRef = doc(db, 'orders', order.id);
+                        const autoCompleteTime = new Date().toISOString();
+                        const history = order.history || [];
+                        history.push({
+                            action: "Auto-Completato",
+                            timestamp: autoCompleteTime,
+                            note: `Finestra di disputa di ${disputeHours} ore superata senza contestazioni.`
+                        });
+                        await updateDoc(orderRef, {
+                            status: RequestStatus.COMPLETED,
+                            updatedAt: autoCompleteTime,
+                            history: history
+                        });
+                        updatedOrder.status = RequestStatus.COMPLETED;
+                    } catch (err) {
+                        console.error("Errore auto-completamento ordine consegnato:", err);
+                    }
+                }
+            }
+
             // C) Check COMPLETED & !acceptedByFan -> Auto-accept by Fan
             if (order.status === RequestStatus.COMPLETED && !order.acceptedByFan) {
                 const baseTimeStr = order.deliveredAt || order.updatedAt || order.createdAt;
@@ -1531,111 +1559,25 @@ export const checkAndApplyAutoDeletion = async (orders: VideoRequest[]): Promise
 
 export const deleteUserAccount = async (userId: string) => {
     try {
-        console.log(`Eliminazione dell'account utente #${userId}`);
-        
-        // 1. Recupero informazioni utente
-        const userDocRef = doc(db, 'users', userId);
-        const userSnap = await getDoc(userDocRef);
-        if (!userSnap.exists()) {
-            throw new Error("Utente non trovato nel database.");
-        }
-        
-        const userData = userSnap.data() as User;
-        const role = userData.role;
-        const label = role === UserRole.FAN ? "Il fan" : "La Star";
-        
-        // 2. Recupero e aggiornamento ordini attivi "in corso"
-        let ordersQuery;
-        if (role === UserRole.FAN) {
-            ordersQuery = query(collection(db, 'orders'), where('fanId', '==', userId));
-        } else {
-            ordersQuery = query(collection(db, 'orders'), where('talentId', '==', userId));
-        }
-        
-        const ordersSnap = await getDocs(ordersQuery);
-        const inProgressStatuses = [
-            RequestStatus.PENDING,
-            RequestStatus.ACCEPTED,
-            RequestStatus.IN_REVIEW,
-            RequestStatus.DISPUTE_OPEN,
-            RequestStatus.CORRECTION_NEEDED
-        ];
-        
-        for (const orderDoc of ordersSnap.docs) {
-            const order = orderDoc.data() as VideoRequest;
-            if (inProgressStatuses.includes(order.status)) {
-                // Ordine in corso -> Annulla
-                const history = order.history || [];
-                const reason = `${label} si è cancellato dalla app.`;
-                const newEvent = {
-                    action: "Ordine annullato",
-                    timestamp: new Date().toISOString(),
-                    note: reason
-                };
-                
-                await updateDoc(orderDoc.ref, {
-                    status: RequestStatus.CANCELED,
-                    rejectionReason: reason,
-                    history: [...history, newEvent],
-                    updatedAt: new Date().toISOString()
-                });
-            }
-        }
-        
-        // 3. Eliminazione delle notifiche dell'utente
-        const notifsQuery = query(collection(db, 'notifications'), where('recipientId', '==', userId));
-        const notifsSnap = await getDocs(notifsQuery);
-        for (const notifDoc of notifsSnap.docs) {
-            await deleteDoc(notifDoc.ref);
-        }
-        
-        // 4. Eliminazione delle recensioni dell'utente (o dell'utente Star)
-        let reviewsQuery;
-        if (role === UserRole.FAN) {
-            reviewsQuery = query(collection(db, 'reviews'), where('fanId', '==', userId));
-        } else {
-            reviewsQuery = query(collection(db, 'reviews'), where('talentId', '==', userId));
-        }
-        const reviewsSnap = await getDocs(reviewsQuery);
-        for (const reviewDoc of reviewsSnap.docs) {
-            await deleteDoc(reviewDoc.ref);
-        }
-        
-        // 5. Eliminazione dei public_samples (se Talent)
-        if (role === UserRole.TALENT) {
-            const samplesQuery = query(collection(db, 'public_samples'), where('talentId', '==', userId));
-            const samplesSnap = await getDocs(samplesQuery);
-            for (const sampleDoc of samplesSnap.docs) {
-                await deleteDoc(sampleDoc.ref);
-            }
-            
-            // Eliminazione dei campioni video correlati
-            const videosQuery = query(collection(db, 'videos'), where('talentId', '==', userId));
-            const videosSnap = await getDocs(videosQuery);
-            for (const videoDoc of videosSnap.docs) {
-                await deleteDoc(videoDoc.ref);
-            }
-        }
-        
-        // 6. Eliminazione delle conversazioni / chat
-        const convsSnap = await getDocs(collection(db, 'conversations'));
-        for (const convDoc of convsSnap.docs) {
-            if (convDoc.id === userId || convDoc.id.includes(userId)) {
-                // Elimina sottocollezione messaggi prima
-                const msgsSnap = await getDocs(collection(db, 'conversations', convDoc.id, 'messages'));
-                for (const msgDoc of msgsSnap.docs) {
-                    await deleteDoc(msgDoc.ref);
-                }
-                await deleteDoc(convDoc.ref);
-            }
-        }
-        
-        // 7. Eliminazione del documento utente
-        await deleteDoc(userDocRef);
-        console.log(`Documento utente #${userId} rimosso con successo`);
-        
+        console.log(`GDPR: Avvio eliminazione dell'account tramite backend Cloud Function per l'utente #${userId}`);
+        const functionsInstance = getFunctions();
+        const deleteFn = httpsCallable<{}, { success: boolean }>(functionsInstance, 'deleteUserAccount');
+        const res = await deleteFn();
+        return !!res.data?.success;
     } catch (e) {
-        console.error("Errore durante l'eliminazione dell'account utente:", e);
+        console.error("Errore delegando l'eliminazione account al backend:", e);
+        throw e;
+    }
+};
+
+export const callGenerateVideoSignedUrl = async (orderId: string): Promise<{ signedUrl: string }> => {
+    try {
+        const functionsInstance = getFunctions();
+        const signedUrlFn = httpsCallable<{ orderId: string }, { signedUrl: string }>(functionsInstance, 'generateVideoSignedUrl');
+        const result = await signedUrlFn({ orderId });
+        return result.data;
+    } catch (e) {
+        console.error("Errore durante la generazione dell'URL firmato:", e);
         throw e;
     }
 };
@@ -1886,6 +1828,13 @@ export const incrementImpressions = async (talentId: string) => {
     } catch (err) {
         console.error("Errore incremento impressioni:", err);
     }
+};
+
+export const callPartialRefundOrder = async (orderId: string, amount: number): Promise<{ success: boolean, refundId: string, totalRefunded: number }> => {
+    const functions = getFunctions();
+    const refundFn = httpsCallable<{ orderId: string, amount: number }, { success: boolean, refundId: string, totalRefunded: number }>(functions, 'partialRefundOrder');
+    const result = await refundFn({ orderId, amount });
+    return result.data;
 };
 
 

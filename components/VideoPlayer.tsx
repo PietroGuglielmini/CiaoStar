@@ -1,18 +1,54 @@
 
-import React, { useRef } from 'react';
-import { Maximize, Upload, ShieldAlert } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Maximize, Upload, ShieldAlert, Loader2 } from 'lucide-react';
+import { callGenerateVideoSignedUrl } from '../services/dataService';
 
 interface VideoPlayerProps {
     src: string;
+    orderId?: string;
     watermarkUrl?: string;
     canDownload?: boolean;
     isVideoDeleted?: boolean;
     videoDeletedReason?: string;
 }
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, watermarkUrl, canDownload = true, isVideoDeleted, videoDeletedReason }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, orderId, watermarkUrl, canDownload = true, isVideoDeleted, videoDeletedReason }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const [videoSrc, setVideoSrc] = useState<string>(src);
+    const [loading, setLoading] = useState<boolean>(false);
+
+    useEffect(() => {
+        const fetchSignedUrl = async () => {
+            if (!orderId) {
+                setVideoSrc(src);
+                return;
+            }
+            
+            // If it's not a storage URL, play directly
+            if (src && !src.includes('firebasestorage.googleapis.com')) {
+                setVideoSrc(src);
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const res = await callGenerateVideoSignedUrl(orderId);
+                if (res && res.signedUrl) {
+                    setVideoSrc(res.signedUrl);
+                } else {
+                    setVideoSrc(src);
+                }
+            } catch (err) {
+                console.error("Failed to generate signed video URL:", err);
+                setVideoSrc(src); // fallback to original
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchSignedUrl();
+    }, [src, orderId]);
 
     const toggleFullscreen = () => {
         if (!containerRef.current) return;
@@ -56,6 +92,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, watermarkUrl, canDownloa
                             </p>
                         </div>
                     </div>
+                ) : loading ? (
+                    <div className="flex flex-col items-center justify-center space-y-3">
+                        <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                        <span className="text-xs text-slate-300 font-bold">Generazione URL Sicuro...</span>
+                    </div>
                 ) : (
                     <>
                         <video 
@@ -63,9 +104,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, watermarkUrl, canDownloa
                             controls 
                             className="w-full h-full object-contain"
                             // nodownload + noremoteplayback helps cleanup UI
-                            controlsList="nodownload noremoteplayback" 
+                            controlsList="nodownload noremoteplayback"
+                            src={videoSrc}
                         >
-                            <source src={src} />
                             Il tuo browser non supporta il video tag.
                         </video>
 
@@ -82,9 +123,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, watermarkUrl, canDownloa
             </div>
 
             {/* Download Link */}
-            {canDownload && !isVideoDeleted && (
+            {canDownload && !isVideoDeleted && !loading && (
                 <a 
-                    href={src} 
+                    href={videoSrc} 
                     download={`ciaostar_video_${Date.now()}`}
                     target="_blank"
                     rel="noopener noreferrer"

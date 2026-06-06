@@ -69,7 +69,7 @@ const OrderCountdown: React.FC<OrderCountdownProps> = ({ order, isTalent, settin
       const baseTimeStr = order.updatedAt || order.createdAt;
       const baseTimeMs = new Date(baseTimeStr).getTime();
       targetDateMs = baseTimeMs + correctionDays * 24 * 60 * 60 * 1000;
-    } else if (order.status === RequestStatus.COMPLETED && !order.acceptedByFan) {
+    } else if (order.status === RequestStatus.DELIVERED || (order.status === RequestStatus.COMPLETED && !order.acceptedByFan)) {
       const baseTimeStr = order.deliveredAt || order.updatedAt || order.createdAt;
       const baseTimeMs = new Date(baseTimeStr).getTime();
       targetDateMs = baseTimeMs + approvalDays * 24 * 60 * 60 * 1000;
@@ -117,7 +117,7 @@ const OrderCountdown: React.FC<OrderCountdownProps> = ({ order, isTalent, settin
         ? 'bg-red-50 border-red-100 text-red-700' 
         : order.status === RequestStatus.PENDING 
           ? 'bg-amber-50/70 border-amber-100/70 text-amber-805' 
-          : order.status === RequestStatus.COMPLETED
+          : (order.status === RequestStatus.COMPLETED || order.status === RequestStatus.DELIVERED)
             ? 'bg-indigo-50/70 border-indigo-100/70 text-indigo-805'
             : 'bg-emerald-50/70 border-emerald-100/70 text-emerald-805'
     }`}>
@@ -131,8 +131,8 @@ const OrderCountdown: React.FC<OrderCountdownProps> = ({ order, isTalent, settin
             {order.status === RequestStatus.ACCEPTED && !isTalent && "Consegna video attesa entro" }
             {order.status === RequestStatus.CORRECTION_NEEDED && isTalent && "Azione richiesta: Riconsegna video corretto entro" }
             {order.status === RequestStatus.CORRECTION_NEEDED && !isTalent && "Riconsegna video corretto attesa entro" }
-            { order.status === RequestStatus.COMPLETED && !order.acceptedByFan && isTalent && "La conferma o contestazione del fan scadrà tra" }
-            { order.status === RequestStatus.COMPLETED && !order.acceptedByFan && !isTalent && "Approva o contesta il video entro" }
+            { (order.status === RequestStatus.DELIVERED || (order.status === RequestStatus.COMPLETED && !order.acceptedByFan)) && isTalent && "La conferma o contestazione del fan scadrà tra" }
+            { (order.status === RequestStatus.DELIVERED || (order.status === RequestStatus.COMPLETED && !order.acceptedByFan)) && !isTalent && "Approva o contesta il video entro" }
           </p>
           <p className="text-xs font-bold font-sans">
             {order.status === RequestStatus.PENDING && isTalent && `Tra ${timeLeft} l'ordine verrà automaticamente rifiutato, hai ancora questo tempo per decidere`}
@@ -141,8 +141,8 @@ const OrderCountdown: React.FC<OrderCountdownProps> = ({ order, isTalent, settin
             {order.status === RequestStatus.ACCEPTED && !isTalent && `La star ha ancora ${timeLeft} per caricare il tuo video prima dell'annullamento automatico` }
             {order.status === RequestStatus.CORRECTION_NEEDED && isTalent && `Tra ${timeLeft} l'ordine verrà automaticamente annullato, hai ancora questo tempo per riconsegnare il video corretto` }
             {order.status === RequestStatus.CORRECTION_NEEDED && !isTalent && `La star ha ancora ${timeLeft} per riconsegnare il video corretto prima dell'annullamento automatico dell'ordine` }
-            { order.status === RequestStatus.COMPLETED && !order.acceptedByFan && isTalent && `Il fan ha ancora ${timeLeft} per approvare o contestare l'ordine prima che diventi definitivo` }
-            { order.status === RequestStatus.COMPLETED && !order.acceptedByFan && !isTalent && `Hai ancora ${timeLeft} per confermare la bontà del video o aprire una contestazione, dopodiché non potrai più farlo` }
+            { (order.status === RequestStatus.DELIVERED || (order.status === RequestStatus.COMPLETED && !order.acceptedByFan)) && isTalent && `Il fan ha ancora ${timeLeft} per approvare o contestare l'ordine prima che diventi definitivo` }
+            { (order.status === RequestStatus.DELIVERED || (order.status === RequestStatus.COMPLETED && !order.acceptedByFan)) && !isTalent && `Hai ancora ${timeLeft} per confermare la bontà del video o aprire una contestazione, dopodiché non potrai più farlo` }
           </p>
         </div>
       </div>
@@ -1476,7 +1476,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
                                                 {/* Azioni di Accettazione/Contestazione per il Fan */}
                                                 {(() => {
-                                                    if (req.status !== RequestStatus.COMPLETED || req.acceptedByFan || req.isVideoDeleted) return null;
+                                                    if (!(req.status === RequestStatus.DELIVERED || (req.status === RequestStatus.COMPLETED && !req.acceptedByFan)) || req.isVideoDeleted) return null;
                                                     const baseTimeStr = req.deliveredAt || req.updatedAt || req.createdAt;
                                                     const baseTimeMs = new Date(baseTimeStr).getTime();
                                                     const limitMs = (adminSettings?.fanApprovalThresholdDays ?? 3) * 24 * 60 * 60 * 1000;
@@ -1494,7 +1494,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                                                                     onClick={() => handleContestInitiate(req.id)}
                                                                     className="py-2.5 px-3 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-red-600 font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
                                                                 >
-                                                                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> Contesta
+                                                                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" /> Contesta Video
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => handleAcceptDefinitively(req.id)}

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { VideoRequest, RequestStatus } from '../types';
-import { getAllOrdersAdmin, resolveDispute, getTalents } from '../services/dataService';
+import { getAllOrdersAdmin, resolveDispute, getTalents, callPartialRefundOrder } from '../services/dataService';
 import { Loader2, AlertTriangle, Check, X, Play, Filter, CreditCard, Clock, Info, Download, Calendar, BarChart3, BookOpen } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
 
@@ -11,6 +11,8 @@ const AdminOrders: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'ALL' | 'DISPUTE'>('ALL');
     const [openHistoryOrderId, setOpenHistoryOrderId] = useState<string | null>(null);
+    const [partialRefundState, setPartialRefundState] = useState<Record<string, string>>({});
+    const [refundSaving, setRefundSaving] = useState<Record<string, boolean>>({});
 
     // Fiscal state
     const [fiscalYear, setFiscalYear] = useState<number>(new Date().getFullYear());
@@ -162,6 +164,40 @@ const AdminOrders: React.FC = () => {
         if (!confirm(confirmMsg)) return;
         await resolveDispute(id, action);
         load();
+    };
+
+    const handlePartialRefund = async (orderId: string, maxAmount: number) => {
+        const amtStr = partialRefundState[orderId];
+        if (!amtStr) {
+            alert("Inserisci un importo valido per il rimborso parziale.");
+            return;
+        }
+        const amt = parseFloat(amtStr);
+        if (isNaN(amt) || amt <= 0 || amt > maxAmount) {
+            alert(`L'importo inserito (€${amtStr}) non è valido. Deve essere compreso tra €0.01 e €${maxAmount.toFixed(2)}.`);
+            return;
+        }
+
+        if (!confirm(`Sei sicuro di voler effettuare un rimborso parziale di €${amt.toFixed(2)} per l'ordine #${orderId}?`)) {
+            return;
+        }
+
+        setRefundSaving(prev => ({ ...prev, [orderId]: true }));
+        try {
+            const res = await callPartialRefundOrder(orderId, amt);
+            if (res.success) {
+                alert("Rimborso parziale eseguito con successo tramite stripe Connect!");
+                setPartialRefundState(prev => ({ ...prev, [orderId]: '' }));
+                load();
+            } else {
+                alert("Il rimborso parziale non ha avuto buon fine.");
+            }
+        } catch (err: any) {
+            console.error(err);
+            alert("Errore durante l'esecuzione del rimborso: " + (err.message || err));
+        } finally {
+            setRefundSaving(prev => ({ ...prev, [orderId]: false }));
+        }
     };
 
     const filtered = orders.filter(o => filter === 'ALL' || o.status === RequestStatus.DISPUTE_OPEN);
@@ -491,6 +527,40 @@ const AdminOrders: React.FC = () => {
                                         >
                                             Ragione al Fan (Rimborsa)
                                         </button>
+                                    </div>
+                                )}
+
+                                {order.stripePaymentIntentId && ![RequestStatus.PENDING, RequestStatus.PENDING_PAYMENT, RequestStatus.REJECTED, RequestStatus.CANCELED, RequestStatus.CANCELED_BY_FAN].includes(order.status) && (
+                                    <div className="flex flex-col gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-left">
+                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider text-center mb-1 flex items-center justify-center gap-1">
+                                            <CreditCard className="w-3.5 h-3.5 text-amber-500" /> Rimborso Parziale
+                                        </p>
+                                        <div className="space-y-2">
+                                            <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                                                <span>Già rimborsato:</span>
+                                                <span className="text-slate-800">€{order.totalRefunded || 0}</span>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1.5 shadow-xs">
+                                                <span className="text-[10px] text-slate-400 font-bold">€</span>
+                                                <input 
+                                                    type="number" 
+                                                    step="0.01"
+                                                    placeholder="es. 10.00"
+                                                    className="w-full bg-transparent text-xs font-bold focus:outline-none"
+                                                    value={partialRefundState[order.id] || ''}
+                                                    onChange={e => setPartialRefundState({...partialRefundState, [order.id]: e.target.value})}
+                                                />
+                                            </div>
+                                            
+                                            <button 
+                                                onClick={() => handlePartialRefund(order.id, (order.pricePaid || 0) - (order.totalRefunded || 0))}
+                                                disabled={refundSaving[order.id] || (order.totalRefunded || 0) >= (order.pricePaid || 0)}
+                                                className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-lg text-[10px] font-black uppercase transition cursor-pointer disabled:opacity-40"
+                                            >
+                                                {refundSaving[order.id] ? <Loader2 className="animate-spin w-3.5 h-3.5 mx-auto" /> : 'Invia Rimborso Stripe'}
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>

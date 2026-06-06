@@ -113,7 +113,7 @@ service cloud.firestore {
           request.auth.uid == existing().fanId && (
             // Allowed to accept their own completed video or open a dispute
             (incoming().status == 'COMPLETED' && incoming().acceptedByFan == true) ||
-            (incoming().status == 'DISPUTE_OPEN' && existing().status == 'COMPLETED') ||
+            (incoming().status in ['DISPUTE_OPEN', 'IN_DISPUTE'] && existing().status in ['DELIVERED', 'COMPLETED']) ||
             (incoming().status == existing().status)
           ) && 
           incoming().pricePaid == existing().pricePaid &&
@@ -124,10 +124,10 @@ service cloud.firestore {
         ) || (
           // TALENT updating their assigned order
           request.auth.uid == existing().talentId && (
-            // Talent can accept / reject / complete orders
+            // Talent can accept / reject / complete / deliver orders
             (incoming().status in ['ACCEPTED', 'REJECTED'] && existing().status == 'PAID_AWAITING_VIDEO') ||
-            // Completing require uploading a video
-            (incoming().status == 'COMPLETED' && (incoming().videoUrl is string && incoming().videoUrl.size() > 10)) ||
+            // Completing or delivering require uploading a video
+            (incoming().status in ['COMPLETED', 'DELIVERED'] && (incoming().videoUrl is string && incoming().videoUrl.size() > 10)) ||
             (incoming().status == existing().status)
           ) &&
           incoming().pricePaid == existing().pricePaid &&

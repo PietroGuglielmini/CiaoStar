@@ -10,6 +10,7 @@ export enum RequestStatus {
   PENDING_PAYMENT = 'PENDING_PAYMENT',
   PAID_AWAITING_VIDEO = 'PAID_AWAITING_VIDEO',
   ACCEPTED = 'ACCEPTED', 
+  DELIVERED = 'DELIVERED',
   COMPLETED = 'COMPLETED', 
   EXPIRED = 'EXPIRED', 
   CANCELED = 'CANCELED', 
@@ -17,6 +18,7 @@ export enum RequestStatus {
   REFUNDED = 'REFUNDED', 
   IN_REVIEW = 'IN_REVIEW',
   DISPUTE_OPEN = 'DISPUTE_OPEN',
+  IN_DISPUTE = 'IN_DISPUTE',
   CORRECTION_NEEDED = 'CORRECTION_NEEDED',
   ACTION_REQUIRED = 'ACTION_REQUIRED',
   REJECTED = 'REJECTED'
@@ -91,6 +93,8 @@ export interface AdminSettings {
   viewMilestones?: number[];
   cartExpiryHours?: number;
   talentSlugPrefix?: string;
+  fattureInCloudApiKey?: string;
+  fattureInCloudCompanyId?: string;
 }
 
 export interface User {

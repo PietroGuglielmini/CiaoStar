@@ -1,9 +1,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { Talent, User, AdminSettings, InAppNotificationSettings } from '../types';
-import { syncUserToDB, updateTalentProfile, getCategories, uploadAvatar, uploadIntroVideo, getAdminSettings, callStripeOnboardTalent } from '../services/dataService';
+import { syncUserToDB, updateTalentProfile, getCategories, uploadAvatar, uploadIntroVideo, getAdminSettings, callStripeOnboardTalent, deleteUserAccount } from '../services/dataService';
 import { moderateText } from '../services/geminiService';
-import { Loader2, Save, DollarSign, Clock, Zap, AlertTriangle, Tag, ChevronDown, Camera, User as UserIcon, Video, Bell, CreditCard, CheckCircle } from 'lucide-react';
+import { Loader2, Save, DollarSign, Clock, Zap, AlertTriangle, Tag, ChevronDown, Camera, User as UserIcon, Video, Bell, CreditCard, CheckCircle, Trash2 } from 'lucide-react';
+import { auth } from '../firebaseConfig';
+import { signOut } from 'firebase/auth';
 
 interface TalentSettingsProps {
     user: User;
@@ -14,6 +16,22 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
     const [categories, setCategories] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+
+    const confirmAccountDeletion = async () => {
+        setDeleting(true);
+        try {
+            await deleteUserAccount(user.uid);
+            await signOut(auth);
+            window.location.hash = '#/';
+            window.location.reload();
+        } catch (err: any) {
+            alert(`Errore eliminazione account: ${err.message || err}`);
+        } finally {
+            setDeleting(false);
+        }
+    };
 
     // Form State
     const [displayName, setDisplayName] = useState('');
@@ -777,6 +795,50 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                             </div>
                         </label>
                     </div>
+                </div>
+
+                {/* 6. Zona Pericolo - GDPR Diritto all'Oblio */}
+                <div className="bg-red-50/50 rounded-xl shadow-sm border border-red-200 p-6">
+                    <h2 className="text-lg font-bold text-red-700 flex items-center mb-1">
+                        <Trash2 className="w-5 h-5 mr-2 text-red-600" /> Zona Pericolo - Diritto all'Oblio (GDPR)
+                    </h2>
+                    <p className="text-sm text-red-900/70 mb-4 font-semibold">
+                        L'eliminazione dell'account è irreversibile. Tutti i tuoi dati personali, video caricati e messaggi di chat verranno eliminati permanentemente. Le fatture e le transazioni amministrative verranno anonimizzate per conformità fiscale.
+                    </p>
+                    
+                    {showDeleteConfirm ? (
+                        <div className="bg-white border border-red-200 rounded-xl p-4 space-y-4">
+                            <p className="text-xs text-red-650 font-black uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                                <AlertTriangle className="w-4 h-4 text-red-500" /> Sei assolutamente sicuro? Questa azione non può essere annullata.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 transition"
+                                >
+                                    No, Mantieni Account
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={confirmAccountDeletion}
+                                    disabled={deleting}
+                                    className="px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-black uppercase transition-all flex items-center gap-1.5"
+                                >
+                                    {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                    Sì, Elimina Account Definitivamente
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold text-xs uppercase px-5 py-3 rounded-xl transition cursor-pointer"
+                        >
+                            Elimina Account Definitivamente
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex justify-end pt-4">

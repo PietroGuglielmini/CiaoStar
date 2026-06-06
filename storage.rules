@@ -1,0 +1,54 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the user has TALENT or ADMIN role in Firestore database
+    function isTalent() {
+      return isAuthenticated() && (
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'TALENT' ||
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'ADMIN'
+      );
+    }
+
+    // Check if file size is below the given threshold in Megabytes
+    function isUnderSizeLimit(limitMB) {
+      return request.resource.size < limitMB * 1024 * 1024;
+    }
+
+    // 1. User avatar pictures (Max 5MB, format must be an image)
+    match /avatars/{userId} {
+      allow read: if true;
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isUnderSizeLimit(5) 
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // 2. Talent introduction profile videos (Max 150MB, format must be a video, only authenticated)
+    match /intro-videos/{filename} {
+      allow read: if true;
+      allow write: if isTalent() 
+                   && isUnderSizeLimit(150) 
+                   && request.resource.contentType.matches('video/.*');
+    }
+
+    // 3. Delivered order videos (Max 250MB webm/mp4 videos)
+    match /videos/{filename} {
+      allow read: if isAuthenticated();
+      allow write: if isTalent() 
+                   && isUnderSizeLimit(250) 
+                   && request.resource.contentType.matches('video/.*');
+    }
+
+    // 4. Client watermark resources
+    match /watermark/{filename} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+  }
+}

@@ -43,6 +43,12 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
     }
 
+    // Rate Limiting Check
+    const ipLimitAllowed = await checkoutRateLimit(context.auth.uid, 15, 60 * 1000 * 15);
+    if (!ipLimitAllowed) {
+        throw new functions.https.HttpsError('resource-exhausted', 'Troppe richieste di pagamento in sequenza. Riprova tra 15 minuti.');
+    }
+
     const { orderId } = data;
     if (!orderId) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing parameter: orderId is required.');
@@ -548,6 +554,12 @@ export const stripeOnboardTalent = functions.https.onCall(async (data, context) 
         throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
     }
 
+    // Rate Limiting Check
+    const onboardAllowed = await checkoutRateLimit(context.auth.uid, 5, 60 * 1000 * 15);
+    if (!onboardAllowed) {
+        throw new functions.https.HttpsError('resource-exhausted', 'Troppe richieste di onboarding in sequenza. Riprova tra poco.');
+    }
+
     const { returnUrl, refreshUrl } = data;
     if (!returnUrl || !refreshUrl) {
         throw new functions.https.HttpsError('invalid-argument', 'Missing parameters: returnUrl and refreshUrl are required.');
@@ -976,6 +988,9 @@ async function generateAndSendInvoice(orderId: string, orderData: any) {
         let rea = 'MI-9876543';
         let emailContact = 'info@ciaostar.it';
 
+        let ficApiKey = '';
+        let ficCompanyId = '';
+
         const configSnap = await db.collection('settings').doc('global_config').get();
         if (configSnap.exists) {
             const data = configSnap.data();
@@ -985,6 +1000,8 @@ async function generateAndSendInvoice(orderId: string, orderData: any) {
             capital = data?.legalCapitalValue || capital;
             rea = data?.legalReaNumber || rea;
             emailContact = data?.legalContactEmail || emailContact;
+            ficApiKey = data?.fattureInCloudApiKey || '';
+            ficCompanyId = data?.fattureInCloudCompanyId || '';
         }
 
         // 2. Legge e-mail del fan
@@ -1119,6 +1136,58 @@ async function generateAndSendInvoice(orderId: string, orderData: any) {
 
         await sendTransactionalEmail(fanEmail, subject, textContent, htmlContent);
         console.log(`[Invoice Generator] Invoice ${invoiceNumber} successfully emailed to ${fanEmail}.`);
+
+        // FattureInCloud API Integration (for Platform Fee commission invoices)
+        if (ficApiKey && ficCompanyId) {
+            try {
+                const https = require('https');
+                const ficData = JSON.stringify({
+                    data: {
+                        type: "invoice",
+                        entity: {
+                            name: fanName,
+                            vat_number: "",
+                            email: fanEmail
+                        },
+                        date: new Date().toISOString().split('T')[0],
+                        payment_method: { name: "Stripe" },
+                        items_list: [
+                            {
+                                name: "Commissione intermediazione video-colloquio CiaoStar",
+                                net_price: marketplaceFee,
+                                vat: { id: 0, value: 22, description: "IVA 22%" }
+                            }
+                        ]
+                    }
+                });
+                
+                const options = {
+                    hostname: 'api-v2.fattureincloud.it',
+                    port: 443,
+                    path: `/c/${ficCompanyId}/issued_documents`,
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${ficApiKey}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(ficData)
+                    }
+                };
+                
+                const ficReq = https.request(options, (ficRes: any) => {
+                    let ficBody = '';
+                    ficRes.on('data', (chunk: any) => ficBody += chunk);
+                    ficRes.on('end', () => {
+                        console.log(`[FattureInCloud API] Response: status=${ficRes.statusCode}, body=${ficBody}`);
+                    });
+                });
+                ficReq.on('error', (e: any) => console.error(`[FattureInCloud API Error]:`, e));
+                ficReq.write(ficData);
+                ficReq.end();
+            } catch (ficErr: any) {
+                console.error("[FattureInCloud Error] Failed to export invoice:", ficErr.message || ficErr);
+            }
+        }
     } catch (invoiceErr) {
         console.error(`[Invoice Generator] Error generating or sending invoice for order ${orderId}:`, invoiceErr);
     }
@@ -1207,4 +1276,236 @@ export const sendRemindersCron = functions.pubsub.schedule('every 24 hours').onR
     }
     return null;
 });
+
+/**
+ * Helper: Rate limiting for Cloud Functions
+ * Store request times dynamically per user UID with a sliding window
+ */
+async function checkoutRateLimit(uid: string, limit: number, windowMs: number): Promise<boolean> {
+    try {
+        const now = Date.now();
+        const limRef = db.collection('rate_limits').doc(uid);
+        const limSnap = await limRef.get();
+        let list: number[] = [];
+        if (limSnap.exists) {
+            list = limSnap.data()?.times || [];
+        }
+        list = list.filter(t => now - t < windowMs);
+        if (list.length >= limit) {
+            return false;
+        }
+        list.push(now);
+        await limRef.set({ times: list });
+        return true;
+    } catch (e) {
+        console.error("Rate limiting error (fail-open):", e);
+        return true;
+    }
+}
+
+/**
+ * 10. partialRefundOrder
+ * Callable Admin Cloud Function to process partial refunds on an order
+ */
+export const partialRefundOrder = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+    
+    const userId = context.auth.uid;
+    const userSnap = await db.collection('users').doc(userId).get();
+    if (!userSnap.exists || userSnap.data()?.role !== 'ADMIN') {
+        throw new functions.https.HttpsError('permission-denied', 'Only admins can perform partial refunds.');
+    }
+    
+    const { orderId, amount } = data;
+    if (!orderId || typeof amount !== 'number' || amount <= 0) {
+        throw new functions.https.HttpsError('invalid-argument', 'Parameters orderId and a positive decimal amount are required.');
+    }
+    
+    try {
+        const orderRef = db.collection('orders').doc(orderId);
+        const orderSnap = await orderRef.get();
+        if (!orderSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'Order not found.');
+        }
+        const orderData = orderSnap.data();
+        const piId = orderData?.stripePaymentIntentId;
+        if (!piId) {
+            throw new functions.https.HttpsError('failed-precondition', 'This order has no Stripe PaymentIntent associated.');
+        }
+        
+        const stripe = await getStripeAsync();
+        const refund = await stripe.refunds.create({
+            payment_intent: piId,
+            amount: Math.round(amount * 100), // convert to cents
+        });
+        
+        const history = orderData.history || [];
+        history.push({
+            action: "Rimborso Parziale Eseguito",
+            timestamp: new Date().toISOString(),
+            note: `Rimborso parziale di €${amount.toFixed(2)} stornato tramite Stripe API (Refund ID: ${refund.id}).`
+        });
+        
+        const refundsList = orderData.refundsList || [];
+        refundsList.push({
+            refundId: refund.id,
+            amount: amount,
+            timestamp: new Date().toISOString()
+        });
+        
+        const totalRefunded = (orderData.totalRefunded || 0) + amount;
+        const currentStatus = totalRefunded >= (orderData.pricePaid || 0) ? 'REFUNDED' : orderData.status;
+
+        await orderRef.update({
+            status: currentStatus,
+            totalRefunded: totalRefunded,
+            refundsList: refundsList,
+            history: history,
+            updatedAt: new Date().toISOString()
+        });
+        
+        return { success: true, refundId: refund.id, totalRefunded };
+    } catch (error: any) {
+        console.error('Error in partialRefundOrder:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Stripe Refund API error');
+    }
+});
+
+/**
+ * 11. deleteUserAccount
+ * Callable Cloud Function (onCall) that securely deletes a user's account and anonymizes database records for GDPR compliance.
+ */
+export const deleteUserAccount = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+    const userId = context.auth.uid;
+
+    try {
+        const batch = db.batch();
+
+        // A. Delete user document from 'users'
+        const userRef = db.collection('users').doc(userId);
+        batch.delete(userRef);
+
+        // B. Anonymize user orders (fanId)
+        const fanOrdersSnap = await db.collection('orders').where('fanId', '==', userId).get();
+        fanOrdersSnap.forEach(docSnap => {
+            batch.update(docSnap.ref, {
+                fanName: '[Deleted User]',
+                fanEmail: '[Deleted User]',
+                recipientName: '[Deleted User]',
+                billingName: '[Deleted User]',
+                billingEmail: '[Deleted User]',
+                updatedAt: new Date().toISOString()
+            });
+        });
+
+        // C. Anonymize user orders (talentId)
+        const talentOrdersSnap = await db.collection('orders').where('talentId', '==', userId).get();
+        talentOrdersSnap.forEach(docSnap => {
+            batch.update(docSnap.ref, {
+                talentName: '[Deleted User]',
+                updatedAt: new Date().toISOString()
+            });
+        });
+
+        // D. Delete message history under /conversations/{userId}/messages
+        const conversationRef = db.collection('conversations').doc(userId);
+        const messagesSnap = await conversationRef.collection('messages').get();
+        messagesSnap.forEach(docSnap => {
+            batch.delete(docSnap.ref);
+        });
+        batch.delete(conversationRef);
+
+        // Commit all firestore deletions and anonymizations
+        await batch.commit();
+
+        // E. Delete the user from Firebase Auth
+        await admin.auth().deleteUser(userId);
+
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error in deleteUserAccount:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Error executing GDPR account deletion');
+    }
+});
+
+/**
+ * 12. generateVideoSignedUrl
+ * Callable Cloud Function (onCall) that checks authentication and ownership permissions,
+ * then generates a time-limited (2 hours) signed Storage URL for video playback.
+ */
+export const generateVideoSignedUrl = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be authenticated.');
+    }
+
+    const { orderId } = data;
+    if (!orderId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Missing parameter: orderId is required.');
+    }
+
+    try {
+        const orderSnap = await db.collection('orders').doc(orderId).get();
+        if (!orderSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'Order not found.');
+        }
+
+        const orderData = orderSnap.data();
+        if (!orderData) {
+            throw new functions.https.HttpsError('not-found', 'Order data is empty.');
+        }
+
+        const userId = context.auth.uid;
+
+        // Verify if the active user is the fan who purchased, the talent who made it, or an admin
+        let isAuthorized = false;
+        if (orderData.fanId === userId || orderData.talentId === userId) {
+            isAuthorized = true;
+        } else {
+            const userSnap = await db.collection('users').doc(userId).get();
+            if (userSnap.exists && userSnap.data()?.role === 'ADMIN') {
+                isAuthorized = true;
+            }
+        }
+
+        if (!isAuthorized) {
+            throw new functions.https.HttpsError('permission-denied', 'Unauthorized access to this video.');
+        }
+
+        const videoUrl = orderData.videoUrl;
+        if (!videoUrl) {
+            throw new functions.https.HttpsError('not-found', 'Video URL not found in order.');
+        }
+
+        let decodedPath = '';
+        if (videoUrl.includes('firebasestorage.googleapis.com')) {
+            // Parse path out of firebasestorage url
+            decodedPath = decodeURIComponent(videoUrl.split('/o/')[1].split('?')[0]);
+        } else if (videoUrl.startsWith('videos/')) {
+            decodedPath = videoUrl;
+        } else {
+            // direct / other url fallback
+            return { signedUrl: videoUrl };
+        }
+
+        const bucket = admin.storage().bucket();
+        const file = bucket.file(decodedPath);
+
+        // Generate Signed URL valid for 2 hours (2 * 60 * 60 * 1000)
+        const [signedUrl] = await file.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 2 * 60 * 60 * 1000
+        });
+
+        return { signedUrl };
+    } catch (error: any) {
+        console.error('Error in generateVideoSignedUrl:', error);
+        throw new functions.https.HttpsError('internal', error.message || 'Error generating signed URL');
+    }
+});
+
 

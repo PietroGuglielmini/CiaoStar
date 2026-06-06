@@ -769,6 +769,28 @@ const AdminSettings: React.FC = () => {
                                 onChange={e => setSettings({...settings!, stripeWebhookSecret: e.target.value})}
                             />
                         </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">FattureInCloud API Key (v2)</label>
+                            <input 
+                                type="password" 
+                                placeholder="• • • • • • • • • • • •"
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={settings?.fattureInCloudApiKey ?? ''}
+                                onChange={e => setSettings({...settings!, fattureInCloudApiKey: e.target.value})}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">FattureInCloud Company ID</label>
+                            <input 
+                                type="text" 
+                                placeholder="es. 123456"
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                value={settings?.fattureInCloudCompanyId ?? ''}
+                                onChange={e => setSettings({...settings!, fattureInCloudCompanyId: e.target.value})}
+                            />
+                        </div>
                     </div>
 
                     <div className="pt-2">
