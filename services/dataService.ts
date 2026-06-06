@@ -2,7 +2,7 @@
 import { db, storage, auth } from '../firebaseConfig';
 import { 
   collection, addDoc, getDocs, query, where, updateDoc, doc, getDoc, setDoc, 
-  orderBy, limit, serverTimestamp, increment, onSnapshot, deleteDoc
+  orderBy, limit, startAfter, serverTimestamp, increment, onSnapshot, deleteDoc
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, SettableMetadata, deleteObject, uploadBytesResumable } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -183,6 +183,96 @@ export const getAllUsersAdmin = async (): Promise<User[]> => {
     const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'));
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+};
+
+export const getUsersAdminPaginated = async (
+    limitSize: number, 
+    roleFilter: string, 
+    startAfterDoc?: any
+): Promise<{ users: User[], lastVisible: any, firstVisible: any }> => {
+    try {
+        const constraints = [];
+        constraints.push(orderBy('createdAt', 'desc'));
+        if (roleFilter && roleFilter !== 'ALL') {
+            constraints.push(where('role', '==', roleFilter));
+        }
+        if (startAfterDoc) {
+            constraints.push(startAfter(startAfterDoc));
+        }
+        constraints.push(limit(limitSize));
+        const q = query(collection(db, 'users'), ...constraints);
+        const snap = await getDocs(q);
+        const users = snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+        return {
+            users,
+            lastVisible: snap.docs[snap.docs.length - 1] || null,
+            firstVisible: snap.docs[0] || null
+        };
+    } catch (e) {
+        handleFirestoreError(e, OperationType.GET, 'users');
+        return { users: [], lastVisible: null, firstVisible: null };
+    }
+};
+
+export const getOrdersAdminPaginated = async (
+    limitSize: number, 
+    filter: 'ALL' | 'DISPUTE', 
+    startAfterDoc?: any
+): Promise<{ orders: VideoRequest[], lastVisible: any, firstVisible: any }> => {
+    try {
+        const constraints = [];
+        constraints.push(orderBy('createdAt', 'desc'));
+        if (filter === 'DISPUTE') {
+            constraints.push(where('status', 'in', ['DISPUTE_OPEN', 'IN_DISPUTE']));
+        }
+        if (startAfterDoc) {
+            constraints.push(startAfter(startAfterDoc));
+        }
+        constraints.push(limit(limitSize));
+        const q = query(collection(db, 'orders'), ...constraints);
+        const snap = await getDocs(q);
+        const rawOrders = snap.docs.map(d => ({ id: d.id, ...d.data() } as VideoRequest));
+        const results = await checkAndApplyAutoDeletion(rawOrders);
+        return {
+            orders: results,
+            lastVisible: snap.docs[snap.docs.length - 1] || null,
+            firstVisible: snap.docs[0] || null
+        };
+    } catch (e) {
+        handleFirestoreError(e, OperationType.GET, 'orders');
+        return { orders: [], lastVisible: null, firstVisible: null };
+    }
+};
+
+export const getReviewsAdminPaginated = async (
+    limitSize: number, 
+    filter: 'ALL' | 'VISIBLE' | 'HIDDEN', 
+    startAfterDoc?: any
+): Promise<{ reviews: Review[], lastVisible: any, firstVisible: any }> => {
+    try {
+        const constraints = [];
+        constraints.push(orderBy('createdAt', 'desc'));
+        if (filter === 'VISIBLE') {
+            constraints.push(where('isHidden', '==', false));
+        } else if (filter === 'HIDDEN') {
+            constraints.push(where('isHidden', '==', true));
+        }
+        if (startAfterDoc) {
+            constraints.push(startAfter(startAfterDoc));
+        }
+        constraints.push(limit(limitSize));
+        const q = query(collection(db, 'reviews'), ...constraints);
+        const snap = await getDocs(q);
+        const reviews = snap.docs.map(d => ({ id: d.id, ...d.data() } as Review));
+        return {
+            reviews,
+            lastVisible: snap.docs[snap.docs.length - 1] || null,
+            firstVisible: snap.docs[0] || null
+        };
+    } catch (e) {
+        handleFirestoreError(e, OperationType.GET, 'reviews');
+        return { reviews: [], lastVisible: null, firstVisible: null };
+    }
 };
 
 export const updateUserApprovalStatus = async (userId: string, isApproved: boolean) => {

@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { VideoRequest, RequestStatus } from '../types';
-import { getAllOrdersAdmin, resolveDispute, getTalents, callPartialRefundOrder } from '../services/dataService';
-import { Loader2, AlertTriangle, Check, X, Play, Filter, CreditCard, Clock, Info, Download, Calendar, BarChart3, BookOpen } from 'lucide-react';
+import { getOrdersAdminPaginated, resolveDispute, getTalents, callPartialRefundOrder } from '../services/dataService';
+import { Loader2, AlertTriangle, Check, X, Play, Filter, CreditCard, Clock, Info, Download, Calendar, BarChart3, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import VideoPlayer from '../components/VideoPlayer';
+import { TableSkeleton } from '../components/Skeleton';
 
 const AdminOrders: React.FC = () => {
     const [orders, setOrders] = useState<VideoRequest[]>([]);
@@ -13,6 +14,12 @@ const AdminOrders: React.FC = () => {
     const [openHistoryOrderId, setOpenHistoryOrderId] = useState<string | null>(null);
     const [partialRefundState, setPartialRefundState] = useState<Record<string, string>>({});
     const [refundSaving, setRefundSaving] = useState<Record<string, boolean>>({});
+
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [lastVisible, setLastVisible] = useState<any>(null);
+    const [pageHistory, setPageHistory] = useState<any[]>([]);
+    const [talentsLoaded, setTalentsLoaded] = useState(false);
 
     // Fiscal state
     const [fiscalYear, setFiscalYear] = useState<number>(new Date().getFullYear());
@@ -132,17 +139,43 @@ const AdminOrders: React.FC = () => {
         downloadCSV(`registro_compensi_${fiscalYear}_payout.csv`, headers, rows);
     };
 
-    const load = async () => {
+    const load = async (direction?: 'NEXT' | 'PREV') => {
         setLoading(true);
         try {
-            const [ordersData, talentsData] = await Promise.all([
-                getAllOrdersAdmin(),
-                getTalents()
-            ]);
-            const tMap: Record<string, string> = {};
-            talentsData.forEach(t => { tMap[t.id] = t.name; });
-            setTalentMap(tMap);
-            setOrders(ordersData);
+            if (!talentsLoaded) {
+                const talentsData = await getTalents();
+                const tMap: Record<string, string> = {};
+                talentsData.forEach(t => { tMap[t.id] = t.name; });
+                setTalentMap(tMap);
+                setTalentsLoaded(true);
+            }
+
+            let cursor = null;
+            let targetPage = currentPage;
+            if (direction === 'NEXT') {
+                cursor = lastVisible;
+                targetPage = currentPage + 1;
+            } else if (direction === 'PREV') {
+                if (currentPage > 2) {
+                    cursor = pageHistory[currentPage - 3];
+                }
+                targetPage = currentPage - 1;
+            } else {
+                targetPage = 1;
+            }
+
+            const res = await getOrdersAdminPaginated(20, filter, cursor);
+            setOrders(res.orders);
+            setLastVisible(res.lastVisible);
+
+            if (direction === 'NEXT') {
+                setPageHistory(prev => [...prev, res.lastVisible]);
+            } else if (direction === 'PREV') {
+                setPageHistory(prev => prev.slice(0, targetPage - 1));
+            } else {
+                setPageHistory([res.lastVisible]);
+            }
+            setCurrentPage(targetPage);
         } catch (e) {
             console.error("Errore nel caricamento dei dati:", e);
         } finally {
@@ -150,7 +183,9 @@ const AdminOrders: React.FC = () => {
         }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        load();
+    }, [filter]);
 
     const handleResolve = async (id: string, action: 'REFUND' | 'CORRECTION' | 'FORCE_ACCEPT') => {
         let confirmMsg = '';
@@ -200,9 +235,7 @@ const AdminOrders: React.FC = () => {
         }
     };
 
-    const filtered = orders.filter(o => filter === 'ALL' || o.status === RequestStatus.DISPUTE_OPEN);
-
-    if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin" /></div>;
+    const filtered = orders;
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
@@ -401,8 +434,12 @@ const AdminOrders: React.FC = () => {
                 </div>
             </div>
 
-            <div className="space-y-4">
-                {filtered.map(order => (
+            {loading ? (
+                <TableSkeleton rows={6} className="mt-8 shadow-sm animate-pulse" />
+            ) : (
+                <>
+                    <div className="space-y-4">
+                        {filtered.map(order => (
                     <div key={order.id} className={`bg-white rounded-3xl border ${order.status === RequestStatus.DISPUTE_OPEN ? 'border-red-200 bg-red-50/20' : 'border-slate-100'} p-6 shadow-sm`}>
                         <div className="flex flex-col lg:flex-row gap-8">
                             <div className="flex-1">
@@ -566,8 +603,37 @@ const AdminOrders: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                ))}
-            </div>
+                        ))}
+
+                        {filtered.length === 0 && (
+                            <div className="py-20 text-center bg-white border border-gray-100 rounded-[2.5rem] p-10 shadow-sm max-w-lg mx-auto">
+                                <p className="text-slate-400 font-bold uppercase text-xs">Nessun ordine trovato.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Pagination Rails */}
+                    <div className="flex items-center justify-between bg-white rounded-3xl border border-gray-100 p-4 mt-8 shadow-sm">
+                        <button 
+                            disabled={currentPage === 1}
+                            onClick={() => load('PREV')}
+                            className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-xs font-extrabold uppercase transition-all shadow-sm cursor-pointer"
+                        >
+                            <ChevronLeft className="w-4 h-4" /> Indietro
+                        </button>
+                        <span className="text-xs font-black uppercase text-slate-400">
+                            Pagina {currentPage}
+                        </span>
+                        <button 
+                            disabled={orders.length < 20}
+                            onClick={() => load('NEXT')}
+                            className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-xs font-extrabold uppercase transition-all shadow-sm cursor-pointer"
+                        >
+                            Avanti <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </>
+            )}
         </div>
     );
 };

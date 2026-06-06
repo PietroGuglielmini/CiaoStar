@@ -5,6 +5,7 @@ import { applyDefaultSEO } from '../services/seoService';
 import TalentCard from '../components/TalentCard';
 import { Search, Loader2, Play } from 'lucide-react';
 import { Talent } from '../types';
+import { CardGridSkeleton } from '../components/Skeleton';
 
 const Home: React.FC = () => {
   const [talents, setTalents] = useState<Talent[]>([]);
@@ -247,9 +248,12 @@ const Home: React.FC = () => {
         )}
 
         {loading ? (
-            <div className="flex flex-col items-center justify-center py-24 space-y-4">
-                <Loader2 className="w-10 h-10 animate-spin text-indigo-600" />
-                <p className="text-slate-500 font-bold uppercase text-xs tracking-widest">Caricamento Star...</p>
+            <div className="space-y-6">
+                <div className="flex items-center justify-between pb-4">
+                    <div className="h-6 w-48 bg-slate-200 animate-pulse rounded-lg" />
+                    <div className="h-8 w-32 bg-slate-200 animate-pulse rounded-xl" />
+                </div>
+                <CardGridSkeleton count={8} />
             </div>
         ) : (
             <>

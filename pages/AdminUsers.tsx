@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { getAllUsersAdmin, createPreCreatedTalent, updateUserDisabledStatus, updateTalentCustomCommission, createNotification } from '../services/dataService';
+import { getUsersAdminPaginated, createPreCreatedTalent, updateUserDisabledStatus, updateTalentCustomCommission, createNotification } from '../services/dataService';
 import { 
     Users, Search, LogIn, Loader2, User as UserIcon, RefreshCw, Filter, 
-    ArrowUpDown, ShieldAlert, Star, Ban, CheckCircle, Bell, AlertTriangle, Send
+    ArrowUpDown, ShieldAlert, Star, Ban, CheckCircle, Bell, AlertTriangle, Send,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
+import { TableSkeleton } from '../components/Skeleton';
 
 interface AdminUsersProps {
     onImpersonate: (user: User) => void;
@@ -16,6 +18,11 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState<'ALL' | UserRole>('ALL');
+
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [lastVisible, setLastVisible] = useState<any>(null);
+    const [pageHistory, setPageHistory] = useState<any[]>([]);
 
     // State per la creazione di nuovi profili talent
     const [newTalentEmail, setNewTalentEmail] = useState('');
@@ -33,11 +40,35 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
     const [sendingNotifs, setSendingNotifs] = useState(false);
     const [showMassNotifForm, setShowMassNotifForm] = useState(false);
 
-    const load = async () => {
+    const load = async (direction?: 'NEXT' | 'PREV') => {
         setLoading(true);
         try {
-            const data = await getAllUsersAdmin();
-            setUsers(data);
+            let cursor = null;
+            let targetPage = currentPage;
+            if (direction === 'NEXT') {
+                cursor = lastVisible;
+                targetPage = currentPage + 1;
+            } else if (direction === 'PREV') {
+                if (currentPage > 2) {
+                    cursor = pageHistory[currentPage - 3];
+                }
+                targetPage = currentPage - 1;
+            } else {
+                targetPage = 1;
+            }
+
+            const res = await getUsersAdminPaginated(20, roleFilter, cursor);
+            setUsers(res.users);
+            setLastVisible(res.lastVisible);
+
+            if (direction === 'NEXT') {
+                setPageHistory(prev => [...prev, res.lastVisible]);
+            } else if (direction === 'PREV') {
+                setPageHistory(prev => prev.slice(0, targetPage - 1));
+            } else {
+                setPageHistory([res.lastVisible]);
+            }
+            setCurrentPage(targetPage);
         } catch (e) {
             console.error(e);
         } finally {
@@ -45,7 +76,9 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
         }
     };
 
-    useEffect(() => { load(); }, []);
+    useEffect(() => {
+        load();
+    }, [roleFilter]);
 
     const handleCreateTalent = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -140,13 +173,6 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
             }
         }
     };
-
-    if (loading) return (
-        <div className="h-[60vh] flex flex-col items-center justify-center">
-            <Loader2 className="animate-spin text-indigo-600 h-10 w-10 mb-4" />
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sincronizzazione Database Utenti...</p>
-        </div>
-    );
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -376,159 +402,186 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
             )}
 
             {/* Users Table */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto no-scrollbar">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-50 border-b border-gray-100">
-                            <tr>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center w-12">
-                                    <input 
-                                        type="checkbox"
-                                        className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
-                                        checked={filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u.id))}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setSelectedUserIds(filteredUsers.map(u => u.id));
-                                            } else {
-                                                setSelectedUserIds([]);
-                                            }
-                                        }}
-                                    />
-                                </th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Utente</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Ruolo</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Iscrizione</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Stato</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Commissione</th>
-                                <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Azioni</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {filteredUsers.length === 0 ? (
-                                <tr>
-                                    <td colSpan={7} className="p-20 text-center text-slate-300 font-bold uppercase italic">
-                                        Nessun utente trovato con questi criteri.
-                                    </td>
-                                </tr>
-                            ) : (
-                                filteredUsers.map(u => (
-                                    <tr key={u.id} className="hover:bg-indigo-50/30 transition-colors">
-                                        <td className="p-6 text-center w-12 col-span-1">
+            {loading ? (
+                <TableSkeleton rows={8} className="mb-8 animate-pulse" />
+            ) : (
+                <>
+                    <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-6">
+                        <div className="overflow-x-auto no-scrollbar">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 border-b border-gray-100">
+                                    <tr>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center w-12">
                                             <input 
                                                 type="checkbox"
                                                 className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
-                                                checked={selectedUserIds.includes(u.id)}
+                                                checked={filteredUsers.length > 0 && filteredUsers.every(u => selectedUserIds.includes(u.id))}
                                                 onChange={(e) => {
                                                     if (e.target.checked) {
-                                                        setSelectedUserIds(prev => [...prev, u.id]);
+                                                        setSelectedUserIds(filteredUsers.map(u => u.id));
                                                     } else {
-                                                        setSelectedUserIds(prev => prev.filter(id => id !== u.id));
+                                                        setSelectedUserIds([]);
                                                     }
                                                 }}
                                             />
-                                        </td>
-                                        <td className="p-6">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-100">
-                                                    {u.avatarUrl ? <img src={u.avatarUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-5 h-5 text-slate-300"/>}
-                                                </div>
-                                                <div>
-                                                    <p className="font-extrabold text-slate-900 leading-none mb-1">{u.name}</p>
-                                                    <p className="text-xs font-medium text-slate-400">{u.email}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="p-6">
-                                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                                                u.role === UserRole.ADMIN ? 'bg-red-100 text-red-600' :
-                                                u.role === UserRole.TALENT ? 'bg-purple-100 text-purple-700' :
-                                                'bg-indigo-100 text-indigo-700'
-                                            }`}>
-                                                {u.role}
-                                            </span>
-                                        </td>
-                                        <td className="p-6">
-                                            <p className="text-xs font-bold text-slate-500">
-                                                {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
-                                            </p>
-                                        </td>
-                                        <td className="p-6">
-                                            {u.isDisabled ? (
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                                                    <span className="text-[10px] font-black text-red-500 uppercase">Disabilitato</span>
-                                                </div>
-                                            ) : u.role === UserRole.TALENT ? (
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className={`w-2 h-2 rounded-full ${u.isApproved ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></div>
-                                                    <span className="text-[10px] font-bold text-slate-500 uppercase">{u.isApproved ? 'Approvato' : 'In attesa'}</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-[10px] font-bold text-slate-300 uppercase">Standard</span>
-                                            )}
-                                        </td>
-                                        <td className="p-6 text-center">
-                                            {u.role === UserRole.TALENT ? (
-                                                <div className="flex items-center justify-center gap-1">
+                                        </th>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Utente</th>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Ruolo</th>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Iscrizione</th>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Stato</th>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Commissione</th>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Azioni</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {filteredUsers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="p-20 text-center text-slate-300 font-bold uppercase italic">
+                                                Nessun utente trovato con questi criteri.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredUsers.map(u => (
+                                            <tr key={u.id} className="hover:bg-indigo-50/30 transition-colors">
+                                                <td className="p-6 text-center w-12 col-span-1">
                                                     <input 
-                                                        type="number" 
-                                                        min="0"
-                                                        max="100"
-                                                        placeholder="Def."
-                                                        value={u.customCommissionPercent !== undefined && u.customCommissionPercent !== null ? u.customCommissionPercent : ''}
-                                                        onChange={async (e) => {
-                                                            const val = e.target.value === '' ? null : Number(e.target.value);
-                                                            setUsers(prev => prev.map(item => item.id === u.id ? { ...item, customCommissionPercent: val } : item));
-                                                            try {
-                                                                await updateTalentCustomCommission(u.id, val);
-                                                            } catch (err) {
-                                                                console.error("Errore aggiornamento commissione:", err);
+                                                        type="checkbox"
+                                                        className="h-4 w-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                        checked={selectedUserIds.includes(u.id)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setSelectedUserIds(prev => [...prev, u.id]);
+                                                            } else {
+                                                                setSelectedUserIds(prev => prev.filter(id => id !== u.id));
                                                             }
                                                         }}
-                                                        className="w-14 px-2 py-1 text-xs font-bold border border-slate-200 rounded-lg text-slate-800 text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                                     />
-                                                    <span className="text-xs font-bold text-slate-500">%</span>
-                                                </div>
-                                            ) : (
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase">Default</span>
-                                            )}
-                                        </td>
-                                        <td className="p-6 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {u.role !== UserRole.ADMIN && (
-                                                    <button 
-                                                        onClick={() => handleToggleDisable(u)}
-                                                        className={`inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border ${
-                                                            u.isDisabled 
-                                                            ? 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 bg-emerald-50/20' 
-                                                            : 'border-rose-200 text-rose-600 hover:bg-rose-50 bg-rose-50/20'
-                                                        }`}
-                                                    >
-                                                        {u.isDisabled ? <CheckCircle className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
-                                                        {u.isDisabled ? 'Abilita' : 'Disabilita'}
-                                                    </button>
-                                                )}
-                                                <button 
-                                                    onClick={() => handleImpersonationClick(u)}
-                                                disabled={u.role === UserRole.ADMIN}
-                                                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
-                                                    u.role === UserRole.ADMIN 
-                                                    ? 'opacity-30 cursor-not-allowed bg-gray-100 text-slate-400' 
-                                                    : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95'
-                                                }`}
-                                            >
-                                                <LogIn className="w-3.5 h-3.5" />
-                                                Accedi come lui
-                                            </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                                                </td>
+                                                <td className="p-6">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-10 h-10 rounded-full bg-slate-100 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-100">
+                                                            {u.avatarUrl ? <img src={u.avatarUrl} className="w-full h-full object-cover" /> : <UserIcon className="w-5 h-5 text-slate-300"/>}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-extrabold text-slate-900 leading-none mb-1">{u.name}</p>
+                                                            <p className="text-xs font-medium text-slate-400">{u.email}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-6">
+                                                    <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                                        u.role === UserRole.ADMIN ? 'bg-red-100 text-red-600' :
+                                                        u.role === UserRole.TALENT ? 'bg-purple-100 text-purple-700' :
+                                                        'bg-indigo-100 text-indigo-700'
+                                                    }`}>
+                                                        {u.role}
+                                                    </span>
+                                                </td>
+                                                <td className="p-6">
+                                                    <p className="text-xs font-bold text-slate-500">
+                                                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
+                                                    </p>
+                                                </td>
+                                                <td className="p-6">
+                                                    {u.isDisabled ? (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                                                            <span className="text-[10px] font-black text-red-500 uppercase">Disabilitato</span>
+                                                        </div>
+                                                    ) : u.role === UserRole.TALENT ? (
+                                                        <div className="flex items-center gap-1.5">
+                                                            <div className={`w-2 h-2 rounded-full ${u.isApproved ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`}></div>
+                                                            <span className="text-[10px] font-bold text-slate-500 uppercase">{u.isApproved ? 'Approvato' : 'In attesa'}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-slate-300 uppercase">Standard</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-6 text-center">
+                                                    {u.role === UserRole.TALENT ? (
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <input 
+                                                                type="number" 
+                                                                min="0"
+                                                                max="100"
+                                                                placeholder="Def."
+                                                                value={u.customCommissionPercent !== undefined && u.customCommissionPercent !== null ? u.customCommissionPercent : ''}
+                                                                onChange={async (e) => {
+                                                                    const val = e.target.value === '' ? null : Number(e.target.value);
+                                                                    setUsers(prev => prev.map(item => item.id === u.id ? { ...item, customCommissionPercent: val } : item));
+                                                                    try {
+                                                                        await updateTalentCustomCommission(u.id, val);
+                                                                    } catch (err) {
+                                                                        console.error("Errore aggiornamento commissione:", err);
+                                                                    }
+                                                                }}
+                                                                className="w-14 px-2 py-1 text-xs font-bold border border-slate-200 rounded-lg text-slate-800 text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                                            />
+                                                            <span className="text-xs font-bold text-slate-500">%</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Default</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-6 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {u.role !== UserRole.ADMIN && (
+                                                            <button 
+                                                                onClick={() => handleToggleDisable(u)}
+                                                                className={`inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border ${
+                                                                    u.isDisabled 
+                                                                    ? 'border-emerald-200 text-emerald-600 hover:bg-emerald-50 bg-emerald-50/20' 
+                                                                    : 'border-rose-200 text-rose-600 hover:bg-rose-50 bg-rose-50/20'
+                                                                }`}
+                                                            >
+                                                                {u.isDisabled ? <CheckCircle className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
+                                                                {u.isDisabled ? 'Abilita' : 'Disabilita'}
+                                                            </button>
+                                                        )}
+                                                        <button 
+                                                            onClick={() => handleImpersonationClick(u)}
+                                                            disabled={u.role === UserRole.ADMIN}
+                                                            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${
+                                                                u.role === UserRole.ADMIN 
+                                                                ? 'opacity-30 cursor-not-allowed bg-gray-100 text-slate-400' 
+                                                                : 'bg-indigo-600 text-white shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95'
+                                                            }`}
+                                                        >
+                                                            <LogIn className="w-3.5 h-3.5" />
+                                                            Accedi come lui
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Pagination control rails */}
+                    <div className="flex items-center justify-between bg-white rounded-3xl border border-gray-100 p-4 mb-8 shadow-sm">
+                        <button 
+                            disabled={currentPage === 1}
+                            onClick={() => load('PREV')}
+                            className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-xs font-extrabold uppercase transition-all shadow-sm cursor-pointer"
+                        >
+                            <ChevronLeft className="w-4 h-4" /> Indietro
+                        </button>
+                        <span className="text-xs font-black uppercase text-slate-400">
+                            Pagina {currentPage}
+                        </span>
+                        <button 
+                            disabled={users.length < 20}
+                            onClick={() => load('NEXT')}
+                            className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-xs font-extrabold uppercase transition-all shadow-sm cursor-pointer"
+                        >
+                            Avanti <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </>
+            )}
             
             <div className="mt-8 bg-blue-50 p-6 rounded-3xl flex gap-4 border border-blue-100">
                 <ShieldAlert className="w-8 h-8 text-blue-500 flex-shrink-0" />

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Review, User, UserRole } from '../types';
-import { getAllReviewsAdmin, getAllUsersAdmin, updateReviewModeration } from '../services/dataService';
+import { getReviewsAdminPaginated, getTalents, updateReviewModeration } from '../services/dataService';
 import { 
     Loader2, 
     Search, 
@@ -11,8 +11,11 @@ import {
     MessageSquare, 
     Calendar,
     ThumbsUp,
-    ShieldAlert
+    ShieldAlert,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
+import { TableSkeleton } from '../components/Skeleton';
 
 const AdminReviews: React.FC = () => {
     const [reviews, setReviews] = useState<Review[]>([]);
@@ -22,15 +25,47 @@ const AdminReviews: React.FC = () => {
     const [filter, setFilter] = useState<'ALL' | 'VISIBLE' | 'HIDDEN'>('ALL');
     const [actioningId, setActioningId] = useState<string | null>(null);
 
-    const loadData = async () => {
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState(1);
+    const [lastVisible, setLastVisible] = useState<any>(null);
+    const [pageHistory, setPageHistory] = useState<any[]>([]);
+    const [talentsLoaded, setTalentsLoaded] = useState(false);
+
+    const loadData = async (direction?: 'NEXT' | 'PREV') => {
         setLoading(true);
         try {
-            const [allReviews, allUsers] = await Promise.all([
-                getAllReviewsAdmin(),
-                getAllUsersAdmin()
-            ]);
-            setReviews(allReviews);
-            setTalents(allUsers.filter(u => u.role === UserRole.TALENT));
+            if (!talentsLoaded) {
+                const talentsData = await getTalents();
+                setTalents(talentsData);
+                setTalentsLoaded(true);
+            }
+
+            let cursor = null;
+            let targetPage = currentPage;
+            if (direction === 'NEXT') {
+                cursor = lastVisible;
+                targetPage = currentPage + 1;
+            } else if (direction === 'PREV') {
+                if (currentPage > 2) {
+                    cursor = pageHistory[currentPage - 3];
+                }
+                targetPage = currentPage - 1;
+            } else {
+                targetPage = 1;
+            }
+
+            const res = await getReviewsAdminPaginated(20, filter, cursor);
+            setReviews(res.reviews);
+            setLastVisible(res.lastVisible);
+
+            if (direction === 'NEXT') {
+                setPageHistory(prev => [...prev, res.lastVisible]);
+            } else if (direction === 'PREV') {
+                setPageHistory(prev => prev.slice(0, targetPage - 1));
+            } else {
+                setPageHistory([res.lastVisible]);
+            }
+            setCurrentPage(targetPage);
         } catch (error) {
             console.error("Errore caricamento recensioni:", error);
         } finally {
@@ -40,7 +75,7 @@ const AdminReviews: React.FC = () => {
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [filter]);
 
     const handleToggleVisibility = async (review: Review) => {
         if (!review.id) return;
@@ -156,10 +191,7 @@ const AdminReviews: React.FC = () => {
             </div>
 
             {loading ? (
-                <div className="py-24 text-center">
-                    <Loader2 className="w-10 h-10 animate-spin text-indigo-600 mx-auto" />
-                    <p className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest">Caricamento in corso...</p>
-                </div>
+                <TableSkeleton rows={6} className="mb-8 animate-pulse shadow-sm" />
             ) : filteredReviews.length === 0 ? (
                 <div className="text-center py-20 bg-white border border-gray-100 rounded-[2.5rem] p-10 shadow-sm max-w-lg mx-auto">
                     <ShieldAlert className="w-12 h-12 text-slate-200 mx-auto mb-4" />
@@ -259,6 +291,29 @@ const AdminReviews: React.FC = () => {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Pagination Controls */}
+            {!loading && (
+                <div className="flex items-center justify-between bg-white rounded-3xl border border-gray-100 p-4 mt-8 shadow-sm">
+                    <button 
+                        disabled={currentPage === 1}
+                        onClick={() => loadData('PREV')}
+                        className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-xs font-extrabold uppercase transition-all shadow-sm cursor-pointer"
+                    >
+                        <ChevronLeft className="w-4 h-4" /> Indietro
+                    </button>
+                    <span className="text-xs font-black uppercase text-slate-400">
+                        Pagina {currentPage}
+                    </span>
+                    <button 
+                        disabled={reviews.length < 20}
+                        onClick={() => loadData('NEXT')}
+                        className="flex items-center gap-1.5 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white text-xs font-extrabold uppercase transition-all shadow-sm cursor-pointer"
+                    >
+                        Avanti <ChevronRight className="w-4 h-4" />
+                    </button>
                 </div>
             )}
         </div>
