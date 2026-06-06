@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { AdminSettings as SettingsType, EmailSettings } from '../types';
 import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings, seedDatabaseAndStructure, uploadBrandingLogo, deleteBrandingLogo } from '../services/dataService';
 import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard, Mail, Sliders, Sparkles } from 'lucide-react';
@@ -110,10 +111,10 @@ const AdminSettings: React.FC = () => {
                 ...(type === 'favicon' && { faviconUrl: url }),
                 ...(type === 'emailLogo' && { emailLogoUrl: url }),
             } : null);
-            alert("File caricato e registrato con successo!");
+            toast.success("File caricato e registrato con successo!");
         } catch (err: any) {
             console.error(err);
-            alert("Errore durante il caricamento: " + (err.message || err));
+            toast.error("Errore durante il caricamento: " + (err.message || err));
         } finally {
             if (type === 'logo') setLogoUploading(false);
             if (type === 'favicon') setFaviconUploading(false);
@@ -131,10 +132,10 @@ const AdminSettings: React.FC = () => {
                 ...(type === 'favicon' && { faviconUrl: undefined }),
                 ...(type === 'emailLogo' && { emailLogoUrl: undefined }),
             } : null);
-            alert("Logo rimosso con successo!");
+            toast.success("Logo rimosso con successo!");
         } catch (err: any) {
             console.error(err);
-            alert("Errore durante la rimozione dello spezzone: " + (err.message || err));
+            toast.error("Errore durante la rimozione dello spezzone: " + (err.message || err));
         }
     };
 
@@ -143,11 +144,11 @@ const AdminSettings: React.FC = () => {
         setSeeding(true);
         try {
             await seedDatabaseAndStructure();
-            alert("Database CiaoStar inizializzato con successo! Tutte le collezioni e i parametri di base sono pronti.");
+            toast.success("Database CiaoStar inizializzato con successo! Tutte le collezioni e i parametri di base sono pronti.");
             await load(); // ricarica i dati
         } catch (err: any) {
             console.error(err);
-            alert("Errore durante l'inizializzazione del database: " + (err.message || err));
+            toast.error("Errore durante l'inizializzazione del database: " + (err.message || err));
         } finally {
             setSeeding(false);
         }
@@ -187,12 +188,12 @@ const AdminSettings: React.FC = () => {
         // Simple regex format email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailSettings.senderEmail || !emailRegex.test(emailSettings.senderEmail)) {
-            alert("Per favore, inserisci un indirizzo email mittente valido.");
+            toast.error("Per favore, inserisci un indirizzo email mittente valido.");
             return;
         }
 
         if (!emailSettings.senderName.trim()) {
-            alert("Il nome del mittente è richiesto.");
+            toast.error("Il nome del mittente è richiesto.");
             return;
         }
 
@@ -205,10 +206,10 @@ const AdminSettings: React.FC = () => {
                 smtpPass,
                 smtpPort,
             } as any);
-            alert("Configurazione Email salvata con successo su Firestore!");
+            toast.success("Configurazione Email salvata con successo su Firestore!");
         } catch (err: any) {
             console.error(err);
-            alert("Errore durante il salvataggio: " + (err.message || err));
+            toast.error("Errore durante il salvataggio: " + (err.message || err));
         } finally {
             setEmailSaving(false);
         }
@@ -220,7 +221,7 @@ const AdminSettings: React.FC = () => {
         setSaving(true);
         await updateAdminSettings(settings);
         setSaving(false);
-        alert("Impostazioni salvate!");
+        toast.success("Impostazioni salvate!");
     };
 
     const handleWatermarkUpload = async () => {

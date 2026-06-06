@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { User, ChatMessage, Conversation, UserRole } from '../types';
 import { subscribeToConversations, subscribeToMessages, sendMessage, markConversationAsRead, updateChatMessage, deleteChatMessage } from '../services/dataService';
 import { Send, Search, User as UserIcon, Loader2, MessageCircle as MsgIcon, Pencil, Trash2, X, Check, Inbox } from 'lucide-react';
@@ -66,7 +67,7 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         } catch (err) {
             console.error(err);
-            alert("Errore invio.");
+            toast.error("Errore durante l'invio del messaggio.");
         }
     };
 
@@ -85,9 +86,10 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
         try {
             await updateChatMessage(selectedConvId, msgId, editText);
             cancelEditing();
+            toast.success("Messaggio modificato.");
         } catch (e) {
             console.error("Error editing message:", e);
-            alert("Errore modifica messaggio");
+            toast.error("Errore durante la modifica del messaggio.");
         }
     };
 
@@ -96,9 +98,10 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
         if (confirm("Sei sicuro di voler eliminare questo messaggio?")) {
             try {
                 await deleteChatMessage(selectedConvId, msgId);
+                toast.success("Messaggio eliminato.");
             } catch (e) {
                 console.error("Error deleting message:", e);
-                alert("Errore eliminazione messaggio");
+                toast.error("Errore durante l'eliminazione del messaggio.");
             }
         }
     };

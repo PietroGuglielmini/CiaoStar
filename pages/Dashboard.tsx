@@ -328,7 +328,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           setIsRecording(true);
       } catch (err: any) {
           console.error("Errore avviamento MediaRecorder:", err);
-          alert("Impossibile avviare la registrazione: " + err.message);
+          toast.error("Impossibile avviare la registrazione: " + err.message);
       }
   };
 
@@ -344,7 +344,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       const file = new File([recordedBlob], `registrazione_${orderId}.webm`, { type: recordedBlob.type || 'video/webm' });
       setUploadFile(file);
       setActiveTab('upload');
-      alert("Registrazione in-app impostata come file video pronto per il caricamento!");
+      toast.success("Registrazione in-app impostata come file video pronto per il caricamento!");
   };
 
   // Dispute States
@@ -407,7 +407,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         setShowNotificationPrefsModal(false);
     } catch (err) {
         console.error("Errore salvataggio preferenze notifiche:", err);
-        alert("Errore durante il salvataggio.");
+        toast.error("Errore durante il salvataggio.");
     } finally {
         setIsSavingPrefs(false);
     }
@@ -1146,10 +1146,10 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                                                                      await updateRequestStatus(req.id, RequestStatus.CANCELED, { 
                                                                          rejectionReason: "Ordine disdetto dal Talent dopo l'accettazione." 
                                                                      });
-                                                                     alert("Ordine disdetto con successo.");
+                                                                     toast.success("Ordine disdetto con successo.");
                                                                      refresh();
                                                                  } catch (err) {
-                                                                     alert("Errore durante la disdetta.");
+                                                                     toast.error("Errore durante la disdetta.");
                                                                  }
                                                              }
                                                         }}

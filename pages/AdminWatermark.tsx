@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { User, UserRole } from '../types';
 import { getAdminSettings, uploadWatermark, deleteWatermark } from '../services/dataService';
 import { Upload, Trash2, ArrowLeft, Image as ImageIcon, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -36,11 +37,11 @@ const AdminWatermark: React.FC<AdminWatermarkProps> = ({ user }) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
             if (!file.type.startsWith('image/')) {
-                alert("Per favore seleziona un file immagine (PNG, JPG).");
+                toast.error("Per favore seleziona un file immagine (PNG, JPG).");
                 return;
             }
             if (file.size > 500 * 1024) {
-                alert("Il file è troppo grande. Max 500KB per garantire prestazioni ottimali.");
+                toast.error("Il file è troppo grande. Max 500KB per garantire prestazioni ottimali.");
                 return;
             }
             setSelectedFile(file);
@@ -56,10 +57,10 @@ const AdminWatermark: React.FC<AdminWatermarkProps> = ({ user }) => {
             setCurrentWatermark(url);
             setSelectedFile(null);
             setPreviewUrl(null);
-            alert("Filigrana salvata con successo!");
+            toast.success("Filigrana salvata con successo!");
         } catch (e: any) {
             console.error(e);
-            alert(`Errore: ${e.message || "Caricamento fallito"}`);
+            toast.error(`Errore: ${e.message || "Caricamento fallito"}`);
         } finally {
             setUploading(false);
         }
@@ -71,9 +72,10 @@ const AdminWatermark: React.FC<AdminWatermarkProps> = ({ user }) => {
         try {
             await deleteWatermark();
             setCurrentWatermark(null);
+            toast.success("Filigrana eliminata.");
         } catch (e) {
             console.error(e);
-            alert("Errore durante l'eliminazione.");
+            toast.error("Errore durante l'eliminazione.");
         } finally {
             setUploading(false);
         }

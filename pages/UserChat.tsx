@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { User, ChatMessage, Conversation, UserRole } from '../types';
 import { sendMessage, subscribeToMessages, subscribeToMyConversation, markConversationAsRead, updateChatMessage, deleteChatMessage } from '../services/dataService';
 import { Send, Loader2, ShieldCheck, User as UserIcon, Pencil, Trash2, X, Check, MessageSquare } from 'lucide-react';
@@ -68,7 +69,7 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
         } catch (err: any) {
             console.error("Errore invio messaggio", err);
-            alert(err instanceof Error ? err.message : "Impossibile inviare il messaggio.");
+            toast.error(err instanceof Error ? err.message : "Impossibile inviare il messaggio.");
         }
     };
 
@@ -87,9 +88,10 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
         try {
             await updateChatMessage(user.id, msgId, editText);
             cancelEditing();
+            toast.success("Messaggio modificato con successo.");
         } catch (e) {
             console.error("Error editing message:", e);
-            alert("Errore modifica messaggio");
+            toast.error("Errore durante la modifica del messaggio.");
         }
     };
 
@@ -97,9 +99,10 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
         if (confirm("Sei sicuro di voler eliminare questo messaggio?")) {
             try {
                 await deleteChatMessage(user.id, msgId);
+                toast.success("Messaggio eliminato.");
             } catch (e) {
                 console.error("Error deleting message:", e);
-                alert("Errore eliminazione messaggio");
+                toast.error("Errore durnate l'eliminazione del messaggio.");
             }
         }
     };

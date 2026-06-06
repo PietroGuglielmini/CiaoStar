@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { User, UserRole } from '../types';
 import { getUsersAdminPaginated, createPreCreatedTalent, updateUserDisabledStatus, updateTalentCustomCommission, createNotification } from '../services/dataService';
 import { 
@@ -125,11 +126,11 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
     const handleSendMassNotifications = async (e: React.FormEvent) => {
         e.preventDefault();
         if (selectedUserIds.length === 0) {
-            alert("Seleziona almeno un utente.");
+            toast.error("Seleziona almeno un utente.");
             return;
         }
         if (!notifSubject.trim() || !notifText.trim()) {
-            alert("Inserisci titolo e messaggio della notifica.");
+            toast.error("Inserisci titolo e messaggio della notifica.");
             return;
         }
 
@@ -152,10 +153,10 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
             setNotifText('');
             setSelectedUserIds([]);
             setShowMassNotifForm(false);
-            alert(`Processo completato per i ${count} utenti selezionati! Se si tratta di comunicazioni marketing, gli utenti che hanno revocato il consenso sono stati saltati automaticamente.`);
+            toast.success(`Processo completato per i ${count} utenti selezionati! Se si tratta di comunicazioni marketing, gli utenti che hanno revocato il consenso sono stati saltati automaticamente.`);
         } catch (err) {
             console.error("Errore invio notifiche:", err);
-            alert("Errore durante l'invio delle notifiche massite.");
+            toast.error("Errore durante l'invio delle notifiche massite.");
         } finally {
             setSendingNotifs(false);
         }
@@ -167,9 +168,10 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
             try {
                 await updateUserDisabledStatus(targetUser.id, !targetUser.isDisabled);
                 setUsers(prev => prev.map(u => u.id === targetUser.id ? { ...u, isDisabled: !targetUser.isDisabled } : u));
+                toast.success(`Profilo ${targetUser.isDisabled ? 'abilitato' : 'disabilitato'} correttamente.`);
             } catch (err) {
                 console.error(err);
-                alert("Errore durante l'aggiornamento dello stato del profilo.");
+                toast.error("Errore durante l'aggiornamento dello stato del profilo.");
             }
         }
     };

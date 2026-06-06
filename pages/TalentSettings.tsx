@@ -1,5 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { Talent, User, AdminSettings, InAppNotificationSettings } from '../types';
 import { syncUserToDB, updateTalentProfile, getCategories, uploadAvatar, uploadIntroVideo, getAdminSettings, callStripeOnboardTalent, deleteUserAccount } from '../services/dataService';
 import { moderateText } from '../services/geminiService';
@@ -27,7 +28,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             window.location.hash = '#/';
             window.location.reload();
         } catch (err: any) {
-            alert(`Errore eliminazione account: ${err.message || err}`);
+            toast.error(`Errore eliminazione account: ${err.message || err}`);
         } finally {
             setDeleting(false);
         }
@@ -217,12 +218,12 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             
             // Quality Check: Size < 5MB
             if (file.size > 5 * 1024 * 1024) {
-                alert("L'immagine è troppo grande. Dimensione massima 5MB.");
+                toast.error("L'immagine è troppo grande. Dimensione massima 5MB.");
                 return;
             }
             // Quality Check: Type
             if (!file.type.startsWith('image/')) {
-                alert("Per favore carica un file immagine valido.");
+                toast.error("Per favore carica un file immagine valido.");
                 return;
             }
 
@@ -237,7 +238,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
 
         // Validazione base dimensione file (es. 50MB max)
         if (file.size > 50 * 1024 * 1024) {
-            alert("Il file del video è troppo grande. Il limite massimo è 50MB.");
+            toast.error("Il file del video è troppo grande. Il limite massimo è 50MB.");
             return;
         }
 
@@ -251,10 +252,10 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                     introVideoUrl: url
                 });
             }
-            alert("Video di benvenuto caricato con successo!");
+            toast.success("Video di benvenuto caricato con successo!");
         } catch (err) {
             console.error("Errore upload video di invito:", err);
-            alert("Si è verificato un errore durante il caricamento del video.");
+            toast.error("Si è verificato un errore durante il caricamento del video.");
         } finally {
             setUploadingIntro(false);
         }
@@ -276,7 +277,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             }
         } catch (err: any) {
             console.error("Errore onboarding Stripe (Connect):", err);
-            alert("Errore per la connessione Stripe Connect: " + (err?.message || err));
+            toast.error("Errore per la connessione Stripe Connect: " + (err?.message || err));
         } finally {
             setOnboardingLoading(false);
         }
@@ -288,7 +289,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
         try {
             // 0. Validazione base
             if (!displayName.trim()) {
-                alert("Il nome visualizzato non può essere vuoto.");
+                toast.error("Il nome visualizzato non può essere vuoto.");
                 setSaving(false);
                 return;
             }
@@ -296,7 +297,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             // 1. Moderazione Nome con Gemini
             const nameCheck = await moderateText(displayName, 'name');
             if (!nameCheck.safe) {
-                alert(`NOME NON VALIDO.\n\nIl nome scelto viola le linee guida:\n${nameCheck.reason}`);
+                toast.error(`NOME NON VALIDO.\n\nIl nome scelto viola le linee guida:\n${nameCheck.reason}`);
                 setSaving(false);
                 return;
             }
@@ -305,7 +306,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             if (user.role === 'TALENT' && bio.trim()) {
                 const bioCheck = await moderateText(bio, 'bio');
                 if (!bioCheck.safe) {
-                    alert(`BIOGRAFIA NON VALIDA.\n\nIl testo viola le linee guida:\n${bioCheck.reason}`);
+                    toast.error(`BIOGRAFIA NON VALIDA.\n\nIl testo viola le linee guida:\n${bioCheck.reason}`);
                     setSaving(false);
                     return;
                 }
@@ -359,10 +360,10 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             setAvatarFile(null); // Clear pending file
             setHasChanges(false);
 
-            alert("Profilo aggiornato con successo!");
+            toast.success("Profilo aggiornato con successo!");
         } catch (error) {
             console.error(error);
-            alert("Errore durante il salvataggio.");
+            toast.error("Errore durante il salvataggio.");
         } finally {
             setSaving(false);
             setUploadingAvatar(false);
