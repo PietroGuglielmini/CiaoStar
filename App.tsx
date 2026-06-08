@@ -163,7 +163,7 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <Router>
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="min-h-screen bg-gray-50 flex flex-col overflow-x-hidden">
           {isOffline && (
             <div className="bg-amber-500 text-white py-2 px-4 flex items-center justify-center gap-2 z-[999] sticky top-0 shadow text-xs font-black uppercase tracking-widest animate-pulse">
               <WifiOff className="w-4 h-4" />

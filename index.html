@@ -147,6 +147,29 @@
         --font-main: 'Plus Jakarta Sans', sans-serif;
       }
 
+      html, body {
+        overflow-x: hidden;
+        max-width: 100%;
+        width: 100%;
+      }
+
+      @keyframes goldGlimmer {
+        0%, 100% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+      }
+      @keyframes floatingSparkle {
+        0%, 100% { transform: translateY(0px) scale(0.9); opacity: 0.2; }
+        50% { transform: translateY(-15px) scale(1.15); opacity: 0.55; }
+      }
+      .gold-shimmer-bg {
+        background: linear-gradient(135deg, #1c1917 0%, #2f2511 35%, #1c1524 70%, #1c1917 100%) !important;
+        background-size: 300% 300%;
+        animation: goldGlimmer 12s ease-in-out infinite;
+      }
+      .sparkle-slow {
+        animation: floatingSparkle 7s ease-in-out infinite;
+      }
+
       body {
         font-family: var(--font-main);
         background-color: var(--color-bg);

@@ -37,10 +37,10 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
                     if (container) {
                         const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 250;
                         if (isNearBottom) {
-                            end.scrollIntoView({ behavior: 'smooth' });
+                            end.scrollIntoView({ behavior: 'smooth', block: 'end' });
                         }
                     } else {
-                        end.scrollIntoView({ behavior: 'smooth' });
+                        end.scrollIntoView({ behavior: 'smooth', block: 'end' });
                     }
                 }
             }, 100);
@@ -59,14 +59,58 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
         };
     }, [user.id, user.role]);
 
+    // RATE LIMITING ADATTIVO (max 5 messaggi all'ora, azzerabili se lo staff risponde)
+    const RATE_LIMIT_COUNT = 5;
+
+    const lastStaffMsg = useMemo(() => {
+        return [...messages].reverse().find(m => m.isAdmin);
+    }, [messages]);
+
+    const { messagesRemaining, isBlocked } = useMemo(() => {
+        const now = new Date();
+        const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+        
+        // Se lo staff risponde, neutralizza e azzera il contatore fino a quella risposta
+        let limitStartTimestamp = oneHourAgo;
+        if (lastStaffMsg && lastStaffMsg.timestamp) {
+            const staffTime = lastStaffMsg.timestamp.toDate 
+                ? lastStaffMsg.timestamp.toDate() 
+                : new Date(lastStaffMsg.timestamp);
+            
+            // Il limite di reset parte esattamente dalla risposta dello staff
+            if (staffTime > oneHourAgo) {
+                limitStartTimestamp = staffTime;
+            }
+        }
+
+        const userMsgsInPeriod = messages.filter(m => {
+            if (m.isAdmin) return false;
+            const msgTime = m.timestamp?.toDate 
+                ? m.timestamp.toDate() 
+                : (m.timestamp ? new Date(m.timestamp) : new Date());
+            return msgTime > limitStartTimestamp;
+        });
+
+        const count = userMsgsInPeriod.length;
+        return {
+            messagesRemaining: Math.max(0, RATE_LIMIT_COUNT - count),
+            isBlocked: count >= RATE_LIMIT_COUNT
+        };
+    }, [messages, lastStaffMsg]);
+
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim()) return;
 
+        if (isBlocked) {
+            toast.error("Hai raggiunto il limite di messaggi all'ora. Attendi la risposta dello staff.");
+            return;
+        }
+
         try {
             await sendMessage(user.id, user.id, newMessage, false);
             setNewMessage('');
-            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
         } catch (err: any) {
             console.error("Errore invio messaggio", err);
             toast.error(err instanceof Error ? err.message : "Impossibile inviare il messaggio.");
@@ -108,7 +152,7 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-4 sm:p-6 h-[calc(100vh-64px)] flex flex-col">
+        <div className="max-w-4xl mx-auto p-4 sm:p-6 h-[calc(100vh-76px)] md:h-[calc(100vh-80px)] flex flex-col overflow-hidden">
             <div className="bg-white rounded-t-3xl shadow-sm border border-gray-100 p-6 flex items-center justify-between z-10">
                 <div className="flex items-center gap-4">
                      <div className="bg-indigo-600 p-2.5 rounded-2xl text-white shadow-lg shadow-indigo-100">
@@ -194,17 +238,18 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
                 <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSend} className="bg-white p-6 rounded-b-3xl border border-gray-100 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.02)] flex items-center gap-3">
+             <form onSubmit={handleSend} className="bg-white p-6 rounded-b-3xl border border-gray-100 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.02)] flex items-center gap-3">
                 <input
                     type="text"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Scrivi qui per aiuto o info..."
-                    className="flex-1 border-gray-200 border-2 rounded-2xl px-5 py-3.5 focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-300 bg-gray-50 transition-all font-medium text-slate-700"
+                    placeholder={isBlocked ? "Chat bloccata per spam. Attendi risposta dello staff..." : `Scrivi qui per aiuto o info... (${messagesRemaining} messaggi rimasti)`}
+                    disabled={isBlocked}
+                    className="flex-1 border-gray-200 border-2 rounded-2xl px-5 py-3.5 focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-300 bg-gray-50 transition-all font-medium text-slate-700 disabled:opacity-50"
                 />
                 <button 
                     type="submit" 
-                    disabled={!newMessage.trim()}
+                    disabled={!newMessage.trim() || isBlocked}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white p-4 rounded-2xl transition-all shadow-xl shadow-indigo-100 disabled:opacity-50 disabled:scale-100 disabled:shadow-none active:scale-95"
                 >
                     <Send className="w-5 h-5" />

@@ -94,26 +94,69 @@ const Home: React.FC = () => {
     return talents.filter(t => !!t.introVideoUrl);
   }, [talents]);
 
+  const [activeCarouselIndex, setActiveCarouselIndex] = useState(0);
+
+  useEffect(() => {
+    if (talents.length === 0) return;
+    const interval = setInterval(() => {
+      setActiveCarouselIndex(prev => (prev + 1) % Math.min(talents.length, 5));
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [talents]);
+
+  const carouselTalents = useMemo(() => {
+    return talents.slice(0, 5);
+  }, [talents]);
+
   return (
     <div className="min-h-screen">
-      {/* Search Hero */}
-      <div className="bg-indigo-600 py-16 md:py-24 px-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-96 h-96 bg-indigo-400 rounded-full blur-3xl opacity-20"></div>
-        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-64 h-64 bg-pink-400 rounded-full blur-3xl opacity-10"></div>
+      {/* Search Hero with Gold Shimmer particles and Talent Carousel in background */}
+      <div className="gold-shimmer-bg py-16 md:py-24 px-4 relative overflow-hidden flex flex-col justify-center min-h-[380px] md:min-h-[460px]">
+        {/* Floating Sparkling Dots */}
+        <div className="absolute inset-0 pointer-events-none select-none z-0">
+          <div className="absolute top-1/4 left-[15%] w-2.5 h-2.5 rounded-full bg-amber-300 blur-[0.5px] sparkle-slow"></div>
+          <div className="absolute top-1/3 right-[20%] w-3.5 h-3.5 rounded-full bg-yellow-400 blur-[1px] sparkle-slow" style={{ animationDelay: '1.5s' }}></div>
+          <div className="absolute bottom-[25%] left-[30%] w-3 h-3 rounded-full bg-amber-200 blur-[0.5px] sparkle-slow" style={{ animationDelay: '3s' }}></div>
+          <div className="absolute bottom-[35%] right-[15%] w-2 h-2 rounded-full bg-yellow-300 blur-[0.5px] sparkle-slow" style={{ animationDelay: '4.5s' }}></div>
+        </div>
+
+        {/* Carousel Background containing Talent Cards */}
+        {carouselTalents.length > 0 && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-15 pointer-events-none select-none z-0 overflow-hidden mix-blend-screen scale-110">
+            {carouselTalents.map((talent, idx) => {
+              const isActive = idx === activeCarouselIndex;
+              return (
+                <div 
+                  key={talent.id} 
+                  className={`absolute transition-all duration-1000 transform ${
+                    isActive ? 'opacity-100 scale-100 translate-y-0 rotate-1' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'
+                  }`}
+                  style={{ width: '240px' }}
+                >
+                  <TalentCard talent={talent} />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Glow gradients */}
+        <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/4 w-96 h-96 bg-amber-400/20 rounded-full blur-3xl opacity-30 pointer-events-none"></div>
+        <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl opacity-20 pointer-events-none"></div>
         
         <div className="max-w-4xl mx-auto text-center relative z-10">
-            <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 tracking-tight">
+            <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 tracking-tight drop-shadow-md">
               Regala un video messaggio <br className="hidden md:block"/> dai tuoi personaggi preferiti
             </h1>
-            <p className="text-indigo-100 text-lg md:text-xl mb-10 font-medium opacity-90">
+            <p className="text-amber-100/90 text-lg md:text-xl mb-10 font-bold opacity-90 tracking-wide drop-shadow-sm">
               Prenota compleanni, lauree o semplici auguri direttamente dalle Star.
             </p>
             
             <div className="relative max-w-2xl mx-auto">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 z-20" />
               <input
                 type="text"
-                className="w-full bg-white border-0 py-5 pl-12 pr-6 rounded-2xl text-slate-900 shadow-2xl focus:ring-4 focus:ring-indigo-300 text-lg transition-all placeholder:text-slate-400"
+                className="w-full bg-white border-0 py-5 pl-12 pr-6 rounded-2xl text-slate-900 shadow-2xl focus:ring-4 focus:ring-amber-400 text-lg transition-all placeholder:text-slate-400 relative z-10"
                 placeholder="Cerca un attore, uno sportivo, un influencer..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}

@@ -44,10 +44,10 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
                     if (container) {
                         const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 250;
                         if (isNearBottom) {
-                            end.scrollIntoView({ behavior: 'smooth' });
+                            end.scrollIntoView({ behavior: 'smooth', block: 'end' });
                         }
                     } else {
-                        end.scrollIntoView({ behavior: 'smooth' });
+                        end.scrollIntoView({ behavior: 'smooth', block: 'end' });
                     }
                 }
             }, 100);
@@ -64,7 +64,7 @@ const AdminChat: React.FC<AdminChatProps> = ({ user }) => {
         try {
             await sendMessage(selectedConvId, user.id, newMessage, true);
             setNewMessage('');
-            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 100);
         } catch (err) {
             console.error(err);
             toast.error("Errore durante l'invio del messaggio.");
