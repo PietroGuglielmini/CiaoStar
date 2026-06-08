@@ -122,16 +122,42 @@ const Home: React.FC = () => {
 
         {/* Carousel Background containing Talent Cards */}
         {carouselTalents.length > 0 && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-15 pointer-events-none select-none z-0 overflow-hidden mix-blend-screen scale-110">
+          <div className="absolute inset-0 flex items-center justify-center opacity-40 pointer-events-none select-none z-0 overflow-hidden mix-blend-screen scale-110">
             {carouselTalents.map((talent, idx) => {
-              const isActive = idx === activeCarouselIndex;
+              const len = carouselTalents.length;
+              let diff = idx - activeCarouselIndex;
+              if (diff > len / 2) diff -= len;
+              if (diff < -len / 2) diff += len;
+
+              let dynamicClasses = '';
+
+              if (diff === 0) {
+                // Primo piano (Foreground / Center)
+                dynamicClasses = 'z-30 scale-100 opacity-100 translate-x-0 rotate-0 blur-none';
+              } else if (diff === 1) {
+                // Destra 1 (Sotto in secondo piano, esce a destra)
+                dynamicClasses = 'z-20 scale-[0.85] opacity-70 translate-x-[120px] md:translate-x-[180px] translate-y-[10px] rotate-[4deg] blur-[1px]';
+              } else if (diff === 2 || diff === -3) {
+                // Destra 2 (Sotto in terzo piano, esce a destra più esterna)
+                dynamicClasses = 'z-10 scale-[0.72] opacity-40 translate-x-[220px] md:translate-x-[320px] translate-y-[20px] rotate-[8deg] blur-[3px]';
+              } else if (diff === -1) {
+                // Sinistra 1 (Sotto in secondo piano, esce a sinistra)
+                dynamicClasses = 'z-20 scale-[0.85] opacity-70 -translate-x-[120px] md:-translate-x-[180px] translate-y-[10px] -rotate-[4deg] blur-[1px]';
+              } else if (diff === -2 || diff === 3) {
+                // Sinistra 2 (Sotto in terzo piano, esce a sinistra più esterna)
+                dynamicClasses = 'z-10 scale-[0.72] opacity-40 -translate-x-[220px] md:-translate-x-[320px] translate-y-[20px] -rotate-[8deg] blur-[3px]';
+              } else {
+                // Nascosto / in attesa
+                dynamicClasses = 'z-0 scale-[0.5] opacity-0 translate-y-32';
+              }
+
               return (
                 <div 
                   key={talent.id} 
-                  className={`absolute transition-all duration-1000 transform ${
-                    isActive ? 'opacity-100 scale-100 translate-y-0 rotate-1' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'
-                  }`}
-                  style={{ width: '240px' }}
+                  className={`absolute transform transition-all duration-1000 ease-in-out ${dynamicClasses}`}
+                  style={{ 
+                    width: '240px',
+                  }}
                 >
                   <TalentCard talent={talent} />
                 </div>
@@ -145,7 +171,7 @@ const Home: React.FC = () => {
         <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/4 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl opacity-20 pointer-events-none"></div>
         
         <div className="max-w-4xl mx-auto text-center relative z-10">
-            <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 tracking-tight drop-shadow-md">
+            <h1 className="text-4xl md:text-6xl font-extrabold mb-6 tracking-tight drop-shadow-lg bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-400 bg-clip-text text-transparent pb-4 pt-1 leading-[1.2]">
               Regala un video messaggio <br className="hidden md:block"/> dai tuoi personaggi preferiti
             </h1>
             <p className="text-amber-100/90 text-lg md:text-xl mb-10 font-bold opacity-90 tracking-wide drop-shadow-sm">
