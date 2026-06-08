@@ -160,7 +160,7 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
                      </div>
                      <div>
                          <h1 className="text-lg font-extrabold text-slate-900 leading-none mb-1">Supporto CiaoStar</h1>
-                         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Chat Diretta Staff</p>
+                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Chat Diretta Staff</p>
                      </div>
                 </div>
             </div>
@@ -169,13 +169,13 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
                 {loading ? (
                     <div className="flex flex-col items-center justify-center pt-20 gap-4">
                         <Loader2 className="animate-spin text-indigo-600 h-8 w-8" />
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Connessione sicura...</p>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Connessione sicura...</p>
                     </div>
                 ) : messages.length === 0 ? (
                     <div className="text-center mt-20 bg-white p-10 rounded-3xl border border-gray-100 shadow-sm max-w-sm mx-auto">
-                        <MessageSquare className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                        <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                         <p className="text-slate-900 font-extrabold mb-1">Nessun messaggio.</p>
-                        <p className="text-xs font-medium text-slate-400">Inviaci una domanda qui sotto, ti risponderemo il prima possibile.</p>
+                        <p className="text-xs font-medium text-slate-500">Inviaci una domanda qui sotto, ti risponderemo il prima possibile.</p>
                     </div>
                 ) : (
                     messages.map((msg) => {
@@ -206,7 +206,7 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
                                                 {msg.text}
                                                 {msg.isEdited && <span className="text-[10px] opacity-60 italic ml-2 font-bold tracking-tight">(modificato)</span>}
                                             </p>
-                                            <p className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                            <p className={`text-[10px] mt-2 font-bold uppercase tracking-widest ${isMe ? 'text-indigo-200' : 'text-slate-500'}`}>
                                                 {msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Adesso'}
                                             </p>
 
@@ -245,7 +245,7 @@ const UserChat: React.FC<UserChatProps> = ({ user }) => {
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder={isBlocked ? "Chat bloccata per spam. Attendi risposta dello staff..." : `Scrivi qui per aiuto o info... (${messagesRemaining} messaggi rimasti)`}
                     disabled={isBlocked}
-                    className="flex-1 border-gray-200 border-2 rounded-2xl px-5 py-3.5 focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-300 bg-gray-50 transition-all font-medium text-slate-700 disabled:opacity-50"
+                    className="flex-1 border-gray-200 border-2 rounded-2xl px-5 py-3.5 focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-300 bg-gray-50 transition-all font-medium text-slate-700 disabled:opacity-50 placeholder-slate-500"
                 />
                 <button 
                     type="submit" 

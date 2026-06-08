@@ -147,29 +147,29 @@ const BecomeStar: React.FC = () => {
           <div className="lg:col-span-7 bg-white rounded-[2.5rem] p-8 md:p-10 border border-slate-100 shadow-sm space-y-6">
             <div className="text-left border-b border-slate-50 pb-4">
               <h2 className="text-xl font-black text-slate-900 uppercase">Invia la tua Candidatura</h2>
-              <p className="text-xs text-slate-400 font-semibold">Compila i campi richiesti per permettere al nostro staff di valutare il tuo profilo.</p>
+              <p className="text-xs text-slate-500 font-semibold mb-1">Compila i campi richiesti per permettere al nostro staff di valutare il tuo profilo.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-left">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome d'Arte / Reale</label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome d'Arte / Reale</label>
                   <input 
                     type="text" 
                     required
                     placeholder="es. Chef Rossi o DJ Star"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500 text-slate-800 placeholder-slate-400"
                     value={name}
                     onChange={e => setName(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Indirizzo Email</label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Indirizzo Email</label>
                   <input 
                     type="email" 
                     required
                     placeholder="nome@email.it"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500 text-slate-800 placeholder-slate-400"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                   />
@@ -178,9 +178,9 @@ const BecomeStar: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Categoria Principale</label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Categoria Principale</label>
                   <select 
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500 text-slate-800 cursor-pointer"
                     value={category}
                     onChange={e => setCategory(e.target.value)}
                   >
@@ -190,12 +190,12 @@ const BecomeStar: React.FC = () => {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Followers Stimati (Totali)</label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Followers Stimati (Totali)</label>
                   <input 
                     type="number" 
                     required
                     placeholder="es. 15000"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500 text-slate-800 placeholder-slate-400"
                     value={followers}
                     onChange={e => setFollowers(e.target.value)}
                   />
@@ -203,24 +203,24 @@ const BecomeStar: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Link Profilo Social Principale</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Link Profilo Social Principale</label>
                 <input 
                   type="url" 
                   required
                   placeholder="https://instagram.com/tuoprofilo"
-                  className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500 text-slate-800 placeholder-slate-400"
                   value={socialLink}
                   onChange={e => setSocialLink(e.target.value)}
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Presentati brevemente</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Presentati brevemente</label>
                 <textarea 
                   rows={3}
                   required
                   placeholder="Raccontaci chi sei, perché vuoi iscriverti a CiaoStar e di cosa ti occupi..."
-                  className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs font-bold focus:outline-none focus:border-indigo-500 text-slate-800 placeholder-slate-400"
                   value={bio}
                   onChange={e => setBio(e.target.value)}
                 />
@@ -228,7 +228,7 @@ const BecomeStar: React.FC = () => {
 
               {/* Legal / Tax options */}
               <div className="pt-2 border-t border-slate-100 space-y-3">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Inquadramento Fiscale Preferito</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Inquadramento Fiscale Preferito</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <label className={`border p-4 rounded-xl flex items-start gap-3 cursor-pointer transition-all ${taxStatus === 'DIP_AUT' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-100 bg-slate-50/50'}`}>
                     <input 
@@ -240,7 +240,7 @@ const BecomeStar: React.FC = () => {
                     />
                     <div>
                       <span className="block text-xs font-black text-slate-900 leading-tight">Persona Fisica</span>
-                      <span className="block text-[10px] text-slate-400 font-semibold leading-normal mt-1">Cessione Diritti d'Autore (Esente IVA, perfetto se non si ha Partita IVA).</span>
+                      <span className="block text-[10px] text-slate-500 font-semibold leading-normal mt-1">Cessione Diritti d'Autore (Esente IVA, perfetto se non si ha Partita IVA).</span>
                     </div>
                   </label>
                   <label className={`border p-4 rounded-xl flex items-start gap-3 cursor-pointer transition-all ${taxStatus === 'PARTITA_IVA' ? 'border-indigo-500 bg-indigo-50/20' : 'border-slate-100 bg-slate-50/50'}`}>
@@ -253,7 +253,7 @@ const BecomeStar: React.FC = () => {
                     />
                     <div>
                       <span className="block text-xs font-black text-slate-900 leading-tight">Partita IVA</span>
-                      <span className="block text-[10px] text-slate-400 font-semibold leading-normal mt-1">Fatturazione autonoma con regime ordinario o forfettario.</span>
+                      <span className="block text-[10px] text-slate-500 font-semibold leading-normal mt-1">Fatturazione autonoma con regime ordinario o forfettario.</span>
                     </div>
                   </label>
                 </div>

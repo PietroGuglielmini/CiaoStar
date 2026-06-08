@@ -386,7 +386,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                             <CreditCard className="w-5 h-5 mr-3 text-indigo-600" />
                             Metodo di Pagamento (Stripe Connect)
                         </h2>
-                        <p className="text-xs text-slate-400 mb-6 uppercase font-bold tracking-wider">
+                        <p className="text-xs text-slate-500 mb-6 uppercase font-bold tracking-wider">
                             Ricevi l'80% di ogni ordine direttamente sul tuo conto corrente bancario o carta di credito
                         </p>
 
@@ -491,7 +491,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                          className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
                                          placeholder="Racconta chi sei ai tuoi fan..."
                                      />
-                                     <p className="text-xs text-gray-400 mt-2">
+                                     <p className="text-xs text-slate-500 mt-2">
                                          La tua bio viene analizzata dall'AI per garantire il rispetto delle linee guida.
                                      </p>
                                  </div>
@@ -725,7 +725,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                             <p className="text-xs font-black text-slate-800 uppercase tracking-tight">
                                                 {notifOption.label}
                                             </p>
-                                            <p className="text-[10px] text-slate-400 font-bold mt-0.5 leading-normal">
+                                            <p className="text-[10px] text-slate-500 font-bold mt-0.5 leading-normal">
                                                 {notifOption.desc}
                                             </p>
                                         </div>
@@ -790,7 +790,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                             />
                             <div>
                                 <span className="block text-xs font-extrabold text-slate-800 uppercase tracking-tight">Comunicazioni di Marketing (GDPR Consent)</span>
-                                <span className="block text-[10px] text-slate-400 font-bold leading-normal mt-0.5">
+                                <span className="block text-[10px] text-slate-500 font-bold leading-normal mt-0.5">
                                     Consento al trattamento dei dati personali per l'invio di newsletter, offerte speciali, sondaggi e comunicazioni commerciali da parte di CiaoStar. Ti ricordiamo che puoi revocare questo consenso in qualsiasi momento direttamente da questa pagina.
                                 </span>
                             </div>

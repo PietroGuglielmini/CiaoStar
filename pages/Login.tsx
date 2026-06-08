@@ -112,14 +112,14 @@ const Login: React.FC = () => {
                 {/* Email / Password Form */}
                 <form onSubmit={handleEmailAuth} className="space-y-4 text-left">
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Indirizzo Email</label>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Indirizzo Email</label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
                         type="email" 
                         required
                         placeholder="nome@esempio.it"
-                        className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-400 text-slate-800"
                         value={email}
                         onChange={e => setEmail(e.target.value)}
                       />
@@ -127,14 +127,14 @@ const Login: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Password</label>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Password</label>
                     <div className="relative">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
                         type="password" 
                         required
                         placeholder="••••••••"
-                        className="w-full bg-slate-50 border border-slate-100 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-400 text-slate-800"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                       />
@@ -150,7 +150,7 @@ const Login: React.FC = () => {
                               onChange={(e) => setTermsAccepted(e.target.checked)}
                               className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
-                          <span className="text-xs text-slate-500 font-semibold leading-relaxed">
+                          <span className="text-xs text-slate-600 font-semibold leading-relaxed">
                               Accetto i <strong className="text-slate-800 font-bold">Termini e Condizioni</strong> e dichiaro di aver visionato l’<strong className="text-slate-800 font-bold">Informativa Privacy</strong> della piattaforma CiaoStar.
                           </span>
                       </label>
@@ -162,7 +162,7 @@ const Login: React.FC = () => {
                               onChange={(e) => setGdprAccepted(e.target.checked)}
                               className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
-                          <span className="text-xs text-slate-500 font-semibold leading-relaxed">
+                          <span className="text-xs text-slate-600 font-semibold leading-relaxed">
                               Consento al <strong className="text-slate-800 font-bold">trattamento dei miei dati personali</strong> (incluso email e foto profilo fornite dai social) in conformità con il Regolamento Europeo n. 2016/679 (<strong className="text-slate-800 font-bold">GDPR</strong>).
                           </span>
                       </label>
@@ -174,7 +174,7 @@ const Login: React.FC = () => {
                       className={`w-full flex items-center justify-center gap-2 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer ${
                           termsAccepted && gdprAccepted 
                           ? 'bg-indigo-600 hover:bg-indigo-700 text-white hover:shadow-indigo-100' 
-                          : 'bg-gray-100 border-gray-100 text-slate-400 opacity-60 cursor-not-allowed'
+                          : 'bg-gray-100 border-gray-100 text-slate-500 cursor-not-allowed opacity-90'
                       }`}
                   >
                       {isRegistering ? (
@@ -191,7 +191,7 @@ const Login: React.FC = () => {
 
                 <div className="flex items-center gap-3">
                   <div className="h-px bg-slate-100 flex-1"></div>
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Oppure accedi con</span>
+                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Oppure accedi con</span>
                   <div className="h-px bg-slate-100 flex-1"></div>
                 </div>
 

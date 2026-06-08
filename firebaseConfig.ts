@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import * as firebaseAuth from 'firebase/auth';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getMessaging } from 'firebase/messaging';
 
 // ⚠️ SOSTITUISCI CON I TUOI DATI DI PROGETTO FIREBASE ⚠️
 // Trovi questi dati nella Firebase Console -> Project Settings
@@ -31,6 +32,17 @@ export const db = initializeFirestore(app, {
 });
 
 export const storage = getStorage(app);
+
+// Initialize messaging with isSupported or safe try/catch wrapper for iframe/safari compatibility
+let messagingInstance: any = null;
+try {
+  if (typeof window !== 'undefined') {
+    messagingInstance = getMessaging(app);
+  }
+} catch (err) {
+  console.warn("FCM messaging could not be initialized (might be blocked in iframe or unsupported browser):", err);
+}
+export const messaging = messagingInstance;
 
 // Enable App Check for Anti-API Bombing and Denegazione del Servizio Finanziaria
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';

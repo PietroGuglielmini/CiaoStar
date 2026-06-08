@@ -94,14 +94,16 @@ const AdminSettings: React.FC = () => {
     const [logoUploading, setLogoUploading] = useState(false);
     const [faviconUploading, setFaviconUploading] = useState(false);
     const [emailLogoUploading, setEmailLogoUploading] = useState(false);
+    const [pwaIconUploading, setPwaIconUploading] = useState(false);
 
-    const handleBrandingUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'favicon' | 'emailLogo') => {
+    const handleBrandingUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'favicon' | 'emailLogo' | 'pwaIcon') => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         if (type === 'logo') setLogoUploading(true);
         if (type === 'favicon') setFaviconUploading(true);
         if (type === 'emailLogo') setEmailLogoUploading(true);
+        if (type === 'pwaIcon') setPwaIconUploading(true);
 
         try {
             const url = await uploadBrandingLogo(file, type);
@@ -110,6 +112,7 @@ const AdminSettings: React.FC = () => {
                 ...(type === 'logo' && { logoUrl: url }),
                 ...(type === 'favicon' && { faviconUrl: url }),
                 ...(type === 'emailLogo' && { emailLogoUrl: url }),
+                ...(type === 'pwaIcon' && { pwaIconUrl: url }),
             } : null);
             toast.success("File caricato e registrato con successo!");
         } catch (err: any) {
@@ -119,10 +122,11 @@ const AdminSettings: React.FC = () => {
             if (type === 'logo') setLogoUploading(false);
             if (type === 'favicon') setFaviconUploading(false);
             if (type === 'emailLogo') setEmailLogoUploading(false);
+            if (type === 'pwaIcon') setPwaIconUploading(false);
         }
     };
 
-    const handleBrandingDelete = async (type: 'logo' | 'favicon' | 'emailLogo') => {
+    const handleBrandingDelete = async (type: 'logo' | 'favicon' | 'emailLogo' | 'pwaIcon') => {
         if (!confirm("Rimuovere questo logo? L'operazione non è reversibile.")) return;
         try {
             await deleteBrandingLogo(type);
@@ -131,6 +135,7 @@ const AdminSettings: React.FC = () => {
                 ...(type === 'logo' && { logoUrl: undefined }),
                 ...(type === 'favicon' && { faviconUrl: undefined }),
                 ...(type === 'emailLogo' && { emailLogoUrl: undefined }),
+                ...(type === 'pwaIcon' && { pwaIconUrl: undefined }),
             } : null);
             toast.success("Logo rimosso con successo!");
         } catch (err: any) {
@@ -1102,6 +1107,27 @@ const AdminSettings: React.FC = () => {
                                         <Upload className="w-4 h-4" />
                                         {emailLogoUploading ? 'Caricamento...' : 'Carica Logo Email'}
                                         <input type="file" accept="image/*" className="hidden" onChange={e => handleBrandingUpload(e, 'emailLogo')} disabled={emailLogoUploading} />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 4. Icona PWA */}
+                        <div className="border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-2">
+                            <label className="block text-[10px] font-black text-slate-500 uppercase">Icona PWA (512x512px consigliato)</label>
+                            {settings?.pwaIconUrl ? (
+                                <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-slate-100">
+                                    <img src={settings.pwaIconUrl} alt="PWA Icon" className="h-8 w-8 object-contain rounded-lg" referrerPolicy="no-referrer" />
+                                    <button type="button" onClick={() => handleBrandingDelete('pwaIcon')} className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer">
+                                        <Trash2 className="w-3.5 h-3.5" /> Rimuovi
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <label className="flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl cursor-pointer text-xs font-bold transition-all">
+                                        <Upload className="w-4 h-4" />
+                                        {pwaIconUploading ? 'Caricamento...' : 'Carica Icona PWA'}
+                                        <input type="file" accept="image/*" className="hidden" onChange={e => handleBrandingUpload(e, 'pwaIcon')} disabled={pwaIconUploading} />
                                     </label>
                                 </div>
                             )}

@@ -1508,4 +1508,99 @@ export const generateVideoSignedUrl = functions.https.onCall(async (data, contex
     }
 });
 
+/**
+ * 8. onMessageCreated
+ * Cloud Function trigger on chat message creation to send real-time Push Notifications via FCM.
+ */
+export const onMessageCreated = functions.firestore
+    .document('conversations/{conversationId}/messages/{messageId}')
+    .onCreate(async (snapshot, context) => {
+        const messageData = snapshot.data();
+        if (!messageData) {
+            console.log("No message data found.");
+            return null;
+        }
+
+        const conversationId = context.params.conversationId;
+        const { senderId, text, isAdmin } = messageData;
+
+        console.log(`[onMessageCreated] New message in conversation: ${conversationId}, sender: ${senderId}, isAdmin: ${isAdmin}`);
+
+        let recipientIds: string[] = [];
+
+        if (isAdmin) {
+            // Se l'invio è dell'admin, il destinatario è l'utente-proprietario della conversazione
+            recipientIds.push(conversationId);
+        } else {
+            // Se l'invio è dell'utente, inviamo a tutti gli amministratori del sistema
+            try {
+                const adminsSnap = await db.collection('users').where('role', '==', 'ADMIN').get();
+                adminsSnap.forEach((doc: any) => {
+                    recipientIds.push(doc.id);
+                });
+            } catch (err) {
+                console.error("Errore nel recuperare gli amministratori:", err);
+            }
+        }
+
+        if (recipientIds.length === 0) {
+            console.log("Nessun destinatario individuato.");
+            return null;
+        }
+
+        // Raccogliamo tutti i token FCM unici dei destinatari
+        const tokens: string[] = [];
+        for (const recipientId of recipientIds) {
+            try {
+                const userSnap = await db.collection('users').doc(recipientId).get();
+                if (userSnap.exists) {
+                    const userData = userSnap.data();
+                    const fcmTokens: string[] = userData?.fcmTokens || [];
+                    fcmTokens.forEach((tk: string) => {
+                        if (tk && typeof tk === 'string' && !tokens.includes(tk)) {
+                            tokens.push(tk);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error(`Errore nel caricamento dei token FCM per l'utente ${recipientId}:`, err);
+            }
+        }
+
+        if (tokens.length === 0) {
+            console.log("Nessun token FCM trovato per i destinatari.");
+            return null;
+        }
+
+        // Invio notifica Multicast FCM tramite l'SDK admin
+        const payload = {
+            tokens: tokens,
+            notification: {
+                title: "Nuovo messaggio in CiaoStar",
+                body: text || "Hai ricevuto un nuovo messaggio."
+            },
+            data: {
+                conversationId: conversationId,
+                click_action: "FLUTTER_NOTIFICATION_CLICK"
+            }
+        };
+
+        try {
+            const response = await admin.messaging().sendEachForMulticast(payload);
+            console.log(`Notifiche Push inviate con successo a ${response.successCount}/${tokens.length} token.`);
+            if (response.failureCount > 0) {
+                console.warn(`${response.failureCount} notifiche hanno fallito l'invio.`);
+                response.responses.forEach((resp, idx) => {
+                    if (!resp.success) {
+                        console.error(`Token fallito a indice ${idx}:`, resp.error);
+                    }
+                });
+            }
+            return response;
+        } catch (error) {
+            console.error("Errore nell'invio della notifica multicast FCM:", error);
+            return null;
+        }
+    });
+
 

@@ -7,6 +7,7 @@ import { useOfflineStatus } from './hooks/useOfflineStatus';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import CookieBanner from './components/CookieBanner';
+import InstallBanner from './components/InstallBanner';
 import Home from './pages/Home';
 import TalentProfile from './pages/TalentProfile';
 import Dashboard from './pages/Dashboard';
@@ -26,6 +27,7 @@ import { auth } from './firebaseConfig';
 import * as firebaseAuth from 'firebase/auth';
 import { syncUserToDB, getAdminSettings, acceptNewTerms, getUserById } from './services/dataService';
 import { Loader2, ShieldCheck, UserCog, WifiOff } from 'lucide-react';
+import { usePushNotifications } from './hooks/usePushNotifications';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -33,6 +35,14 @@ const App: React.FC = () => {
   const [adminSettings, setAdminSettings] = useState<SettingsType | null>(null);
   const [realAdminId, setRealAdminId] = useState<string | null>(sessionStorage.getItem('realAdminId'));
   const isOffline = useOfflineStatus();
+
+  const { requestPermissionAndSaveToken } = usePushNotifications(user?.id);
+
+  useEffect(() => {
+    if (user?.id) {
+      requestPermissionAndSaveToken().catch((e) => console.warn("Errore notifica push al login:", e));
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -247,6 +257,7 @@ const App: React.FC = () => {
 
           <Footer user={user} />
           <CookieBanner />
+          <InstallBanner />
         </div>
         <Toaster position="top-right" />
       </Router>

@@ -85,6 +85,7 @@ export interface AdminSettings {
   logoUrl?: string;
   faviconUrl?: string;
   emailLogoUrl?: string;
+  pwaIconUrl?: string;
   logoNavbarSize?: number;
   logoFooterSize?: number;
   seoDefaultTitle?: string;

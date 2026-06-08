@@ -1397,7 +1397,7 @@ export const deleteWatermark = async () => {
 };
 
 // --- BRANDING LOGO COMPONENT SERVICES ---
-export const uploadBrandingLogo = async (file: File, type: 'logo' | 'favicon' | 'emailLogo'): Promise<string> => {
+export const uploadBrandingLogo = async (file: File, type: 'logo' | 'favicon' | 'emailLogo' | 'pwaIcon'): Promise<string> => {
     const storageRef = ref(storage, `settings/branding_${type}_${Date.now()}`);
     await uploadBytes(storageRef, file);
     const url = await getDownloadURL(storageRef);
@@ -1405,15 +1405,17 @@ export const uploadBrandingLogo = async (file: File, type: 'logo' | 'favicon' | 
     if (type === 'logo') updateObj.logoUrl = url;
     if (type === 'favicon') updateObj.faviconUrl = url;
     if (type === 'emailLogo') updateObj.emailLogoUrl = url;
+    if (type === 'pwaIcon') updateObj.pwaIconUrl = url;
     await updateDoc(doc(db, 'settings', 'global_config'), updateObj);
     return url;
 };
 
-export const deleteBrandingLogo = async (type: 'logo' | 'favicon' | 'emailLogo'): Promise<void> => {
+export const deleteBrandingLogo = async (type: 'logo' | 'favicon' | 'emailLogo' | 'pwaIcon'): Promise<void> => {
     const updateObj: Record<string, null> = {};
     if (type === 'logo') updateObj.logoUrl = null;
     if (type === 'favicon') updateObj.faviconUrl = null;
     if (type === 'emailLogo') updateObj.emailLogoUrl = null;
+    if (type === 'pwaIcon') updateObj.pwaIconUrl = null;
     await updateDoc(doc(db, 'settings', 'global_config'), updateObj);
 };
 
