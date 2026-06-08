@@ -1002,7 +1002,13 @@ const AdminSettings: React.FC = () => {
                             <label className="block text-[10px] font-black text-slate-500 uppercase">Logo Principale (Navbar & Footer)</label>
                             {settings?.logoUrl ? (
                                 <div className="flex items-center justify-between gap-2 p-2 bg-white rounded-xl border border-slate-100">
-                                    <img src={settings.logoUrl} alt="Logo" className="h-8 max-w-[120px] object-contain" referrerPolicy="no-referrer" />
+                                    <img 
+                                        src={settings.logoUrl} 
+                                        alt="Logo" 
+                                        style={{ height: `${settings?.logoNavbarSize ?? 32}px` }} 
+                                        className="max-w-[120px] object-contain" 
+                                        referrerPolicy="no-referrer" 
+                                    />
                                     <button type="button" onClick={() => handleBrandingDelete('logo')} className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer">
                                         <Trash2 className="w-3.5 h-3.5" /> Rimuovi
                                     </button>
@@ -1016,6 +1022,47 @@ const AdminSettings: React.FC = () => {
                                     </label>
                                 </div>
                             )}
+
+                            {/* Sliders per ridimensionare il logo */}
+                            <div className="pt-3 border-t border-slate-200/60 space-y-4">
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase">Altezza Logo Navbar</label>
+                                        <span className="text-xs font-bold text-indigo-600 font-mono">{settings?.logoNavbarSize ?? 32}px</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-bold text-slate-400">16px</span>
+                                        <input 
+                                            type="range" 
+                                            min="16" 
+                                            max="96" 
+                                            className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                            value={settings?.logoNavbarSize ?? 32}
+                                            onChange={e => setSettings({...settings!, logoNavbarSize: Number(e.target.value)})}
+                                        />
+                                        <span className="text-[10px] font-bold text-slate-400">96px</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase">Altezza Logo Footer</label>
+                                        <span className="text-xs font-bold text-indigo-600 font-mono">{settings?.logoFooterSize ?? 32}px</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-bold text-slate-400">16px</span>
+                                        <input 
+                                            type="range" 
+                                            min="16" 
+                                            max="128" 
+                                            className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                                            value={settings?.logoFooterSize ?? 32}
+                                            onChange={e => setSettings({...settings!, logoFooterSize: Number(e.target.value)})}
+                                        />
+                                        <span className="text-[10px] font-bold text-slate-400">128px</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* 2. Favicon */}

@@ -53,7 +53,13 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
             setIsOpen(false);
           }}>
             {settings?.logoUrl ? (
-              <img src={settings.logoUrl} alt="CiaoStar Logo" className="h-8 w-auto object-contain mr-2" referrerPolicy="no-referrer" />
+              <img 
+                src={settings.logoUrl} 
+                alt="CiaoStar Logo" 
+                className="w-auto object-contain mr-2" 
+                style={{ height: settings.logoNavbarSize ? `${settings.logoNavbarSize}px` : '32px' }}
+                referrerPolicy="no-referrer" 
+              />
             ) : (
               <>
                 <div className="bg-indigo-600 p-1.5 rounded-xl mr-2.5">

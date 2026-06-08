@@ -57,7 +57,13 @@ const Footer: React.FC<FooterProps> = ({ user }) => {
           <div className="col-span-1 md:col-span-1">
             <div className="flex items-center mb-6">
               {settings?.logoUrl ? (
-                <img src={settings.logoUrl} alt="CiaoStar Logo" className="h-8 w-auto object-contain mr-2" referrerPolicy="no-referrer" />
+                <img 
+                  src={settings.logoUrl} 
+                  alt="CiaoStar Logo" 
+                  className="w-auto object-contain mr-2" 
+                  style={{ height: settings.logoFooterSize ? `${settings.logoFooterSize}px` : '32px' }}
+                  referrerPolicy="no-referrer" 
+                />
               ) : (
                 <>
                   <div className="bg-amber-500 p-1.5 rounded-xl mr-2.5">
