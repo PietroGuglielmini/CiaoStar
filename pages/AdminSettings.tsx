@@ -6,65 +6,51 @@ import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark
 import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard, Mail, Sliders, Sparkles } from 'lucide-react';
 
 const WatermarkLivePreview: React.FC<{ settings: SettingsType | null }> = ({ settings }) => {
-    const text = settings?.watermarkText || 'CiaoStar';
-    const hAlign = settings?.watermarkHAlign || 'rightaligned';
+    const imgUrl = settings?.watermarkUrl;
+    const hAlign = settings?.watermarkHAlign || 'centeraligned';
     const vAlign = settings?.watermarkVAlign || 'bottomalligned';
-    const speed = settings?.watermarkTypingSpeed || 12;
     const opacity = settings?.watermarkOpacity !== undefined ? settings.watermarkOpacity : 0.6;
-    const color = settings?.watermarkColor || '#ffffff';
-    const fontSize = settings?.watermarkFontSize || 4;
+    const widthPercent = settings?.watermarkWidthPercent !== undefined ? settings.watermarkWidthPercent : 20;
 
-    const [displayText, setDisplayText] = useState('');
-
-    useEffect(() => {
-        let index = 0;
-        setDisplayText('');
-        
-        const intervalMs = Math.round(1000 / speed);
-        const timer = setInterval(() => {
-            index++;
-            if (index <= text.length) {
-                setDisplayText(text.substring(0, index));
-            } else {
-                clearInterval(timer);
-                setTimeout(() => {
-                    setDisplayText('');
-                }, 1500);
-            }
-        }, intervalMs);
-
-        return () => clearInterval(timer);
-    }, [text, speed]);
-
-    let alignClasses = "absolute m-4 rounded font-black break-all whitespace-pre-wrap select-none transition-all";
+    let alignClasses = "absolute rounded select-none transition-all pointer-events-none";
     
     if (hAlign === 'leftaligned') {
-        alignClasses += " left-2 text-left";
+        alignClasses += " left-3";
     } else if (hAlign === 'centeraligned') {
-        alignClasses += " left-1/2 -translate-x-1/2 text-center";
+        alignClasses += " left-1/2 -translate-x-1/2";
     } else {
-        alignClasses += " right-2 text-right";
+        alignClasses += " right-3";
     }
 
     if (vAlign === 'topaligned') {
-        alignClasses += " top-2";
+        alignClasses += " top-3";
     } else if (vAlign === 'centreallinement') {
         alignClasses += " top-1/2 -translate-y-1/2";
     } else {
-        alignClasses += " bottom-2";
+        alignClasses += " bottom-3";
     }
 
     const style = {
-        fontSize: `${fontSize * 1.3}px`,
-        color: color,
+        width: `${widthPercent}%`,
         opacity: opacity,
-        textShadow: '0 1px 3px rgba(0,0,0,0.8)'
     };
 
+    if (!imgUrl) {
+        return (
+            <div className={alignClasses + " bg-slate-800/80 text-white text-[9px] px-2.5 py-1.5 rounded-lg border border-slate-700/60 uppercase font-black tracking-wider text-center"}>
+                Carica Filigrana
+            </div>
+        );
+    }
+
     return (
-        <div className={alignClasses} style={style}>
-            {displayText || '\u00A0'}
-        </div>
+        <img 
+            src={imgUrl} 
+            alt="Watermark Preview" 
+            className={alignClasses} 
+            style={style}
+            referrerPolicy="no-referrer"
+        />
     );
 };
 
@@ -229,20 +215,43 @@ const AdminSettings: React.FC = () => {
         toast.success("Impostazioni salvate!");
     };
 
-    const handleWatermarkUpload = async () => {
-        if (!watermarkFile) return;
+    const handleWatermarkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            toast.error("Per favore seleziona un file immagine (PNG, JPG, ecc.).");
+            return;
+        }
+
         setSaving(true);
-        const url = await uploadWatermark(watermarkFile);
-        setWatermarkPreview(url);
-        setWatermarkFile(null);
-        setSaving(false);
+        try {
+            const url = await uploadWatermark(file);
+            setWatermarkPreview(url);
+            setSettings(prev => prev ? { ...prev, watermarkUrl: url } : null);
+            toast.success("Impostazioni e filigrana aggiornate con successo!");
+        } catch (err: any) {
+            console.error(err);
+            toast.error("Errore durante il caricamento della filigrana: " + (err.message || err));
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleDeleteWatermark = async () => {
-        if (!confirm("Eliminare la filigrana?")) return;
-        await deleteWatermark();
-        setWatermarkPreview(null);
-        setSettings(prev => prev ? {...prev, watermarkUrl: undefined} : null);
+        if (!confirm("Rimuovere questa filigrana? L'operazione non è reversibile.")) return;
+        setSaving(true);
+        try {
+            await deleteWatermark();
+            setWatermarkPreview(null);
+            setSettings(prev => prev ? { ...prev, watermarkUrl: undefined } : null);
+            toast.success("Filigrana rimossa con successo!");
+        } catch (err: any) {
+            console.error(err);
+            toast.error("Errore durante la rimozione della filigrana: " + (err.message || err));
+        } finally {
+            setSaving(false);
+        }
     };
 
     if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin" /></div>;
@@ -572,58 +581,55 @@ const AdminSettings: React.FC = () => {
                         <ImageIcon className="w-5 h-5 text-indigo-500 animate-pulse" /> Filigrana di Brand Dinamica (Anti-Contraffazione)
                     </h2>
                     <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
-                        Configura la filigrana di testo dinamica da applicare automaticamente sui video. Il testo si compone lettera per lettera frame-by-frame, rendendo quasi impossibile la rimozione automatica da parte di malintenzionati.
+                        Configura la filigrana grafica (immagine PNG con sfondo trasparente consigliata) da inserire in sovrimpressione permanentemente sui video realizzati dalle Star, controllando posizione e dimensioni.
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Controlli Dinamici */}
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Testo della Filigrana</label>
-                                <input 
-                                    type="text" 
-                                    required
-                                    placeholder="es. CiaoStar.it"
-                                    className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
-                                    value={settings?.watermarkText ?? 'CiaoStar'}
-                                    onChange={e => setSettings({...settings!, watermarkText: e.target.value})}
-                                />
+                            {/* File Upload Filigrana */}
+                            <div className="border border-slate-100 p-4 rounded-2xl bg-slate-50/50 space-y-2">
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Immagine della Filigrana</label>
+                                {settings?.watermarkUrl ? (
+                                    <div className="flex items-center justify-between gap-2 p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                            <img src={settings.watermarkUrl} alt="Watermark" className="h-10 w-10 object-contain rounded-lg p-1 bg-slate-100" referrerPolicy="no-referrer" />
+                                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full uppercase">Caricata</span>
+                                        </div>
+                                        <button type="button" onClick={handleDeleteWatermark} className="text-xs text-rose-500 hover:text-rose-700 font-bold flex items-center gap-1 cursor-pointer transition-all">
+                                            <Trash2 className="w-3.5 h-3.5" /> Rimuovi
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-4">
+                                        <label className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl cursor-pointer text-xs font-black transition-all shadow-sm">
+                                            <Upload className="w-4 h-4" />
+                                            {saving ? 'Caricamento...' : 'Carica Immagine Filigrana'}
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleWatermarkFileChange} disabled={saving} />
+                                        </label>
+                                        <span className="text-[10px] text-slate-400 font-bold">Consigliato PNG trasparente, max 500KB</span>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Dimensione Font (% altezza)</label>
-                                    <input 
-                                        type="number" 
-                                        min="2"
-                                        max="15"
-                                        step="0.5"
-                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
-                                        value={settings?.watermarkFontSize ?? 4}
-                                        onChange={e => setSettings({...settings!, watermarkFontSize: Number(e.target.value)})}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Colore Filigrana</label>
-                                    <div className="flex gap-2">
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Dimensione (% larghezza)</label>
+                                    <div className="flex items-center gap-2">
                                         <input 
-                                            type="color" 
-                                            className="h-10 w-10 border-0 bg-transparent rounded-lg cursor-pointer shrink-0"
-                                            value={settings?.watermarkColor ?? '#ffffff'}
-                                            onChange={e => setSettings({...settings!, watermarkColor: e.target.value})}
+                                            type="range" 
+                                            min="5"
+                                            max="80"
+                                            step="1"
+                                            className="w-full accent-indigo-600 cursor-pointer"
+                                            value={settings?.watermarkWidthPercent ?? 20}
+                                            onChange={e => setSettings({...settings!, watermarkWidthPercent: Number(e.target.value)})}
                                         />
-                                        <input 
-                                            type="text" 
-                                            placeholder="#ffffff"
-                                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-2 py-1.5 text-xs font-bold font-mono focus:outline-none focus:border-indigo-500 transition-colors"
-                                            value={settings?.watermarkColor ?? '#ffffff'}
-                                            onChange={e => setSettings({...settings!, watermarkColor: e.target.value})}
-                                        />
+                                        <span className="text-xs font-bold text-slate-500 font-mono w-10 shrink-0">
+                                            {settings?.watermarkWidthPercent ?? 20}%
+                                        </span>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Trasparenza (Opacity)</label>
                                     <div className="flex items-center gap-2">
@@ -641,31 +647,14 @@ const AdminSettings: React.FC = () => {
                                         </span>
                                     </div>
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Velocità di Digitazione</label>
-                                    <div className="flex items-center gap-2">
-                                        <input 
-                                            type="range" 
-                                            min="2"
-                                            max="45"
-                                            step="1"
-                                            className="w-full accent-indigo-600 cursor-pointer"
-                                            value={settings?.watermarkTypingSpeed ?? 12}
-                                            onChange={e => setSettings({...settings!, watermarkTypingSpeed: Number(e.target.value)})}
-                                        />
-                                        <span className="text-xs font-bold text-slate-500 font-mono w-14 shrink-0">
-                                            {settings?.watermarkTypingSpeed ?? 12} c/s
-                                        </span>
-                                    </div>
-                                </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Posizione Orizzontale</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Allineamento Orizzontale</label>
                                     <select 
-                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
-                                        value={settings?.watermarkHAlign ?? 'rightaligned'}
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer text-slate-800"
+                                        value={settings?.watermarkHAlign ?? 'centeraligned'}
                                         onChange={e => setSettings({...settings!, watermarkHAlign: e.target.value as any})}
                                     >
                                         <option value="leftaligned">A Sinistra</option>
@@ -674,9 +663,9 @@ const AdminSettings: React.FC = () => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Posizione Verticale</label>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Allineamento Verticale</label>
                                     <select 
-                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer text-slate-800"
                                         value={settings?.watermarkVAlign ?? 'bottomalligned'}
                                         onChange={e => setSettings({...settings!, watermarkVAlign: e.target.value as any})}
                                     >
@@ -691,7 +680,7 @@ const AdminSettings: React.FC = () => {
                         {/* Anteprima Live Riquadro 9:16 Simulata */}
                         <div className="space-y-2 flex flex-col items-center justify-center">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Simulatore Anteprima 9:16</span>
-                            <div className="relative aspect-[9/16] h-[250px] bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex items-center justify-center">
+                            <div className="relative aspect-[9/16] h-[250px] bg-slate-950 border border-slate-800 rounded-2xl shadow-xl overflow-hidden w-full max-w-[150px]">
                                 <span className="absolute top-2 left-2 bg-slate-800/80 text-[7px] font-bold text-slate-300 uppercase px-1.5 py-0.5 rounded leading-normal select-none pointer-events-none z-10">
                                     Simulatore Video
                                 </span>

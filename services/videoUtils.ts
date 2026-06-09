@@ -34,16 +34,57 @@ export const addWatermarkToVideo = async (videoFile: File, settings?: any): Prom
         };
 
         try {
-            console.log("VideoUtils: Inizio processing con filigrana testuale dinamica...");
+            console.log("VideoUtils: Inizio processing con filigrana grafica...");
 
             // Configurazione watermark
-            const watermarkText = settings?.watermarkText || 'CiaoStar';
-            const fontSizePercent = Number(settings?.watermarkFontSize) || 4;
-            const hAlign = settings?.watermarkHAlign || 'rightaligned';
+            const watermarkUrl = settings?.watermarkUrl;
+            const hAlign = settings?.watermarkHAlign || 'centeraligned';
             const vAlign = settings?.watermarkVAlign || 'bottomalligned';
-            const typingSpeed = Number(settings?.watermarkTypingSpeed) || 12;
+            const widthPercent = Number(settings?.watermarkWidthPercent) || 20;
             const opacity = settings?.watermarkOpacity !== undefined ? Number(settings?.watermarkOpacity) : 0.6;
-            const color = settings?.watermarkColor || '#ffffff';
+
+            // Precaricamento dell'immagine watermark (se presente) con fallbacks e protezione crash
+            let watermarkImg: HTMLImageElement | null = null;
+            if (watermarkUrl) {
+                try {
+                    console.log("Tentativo di precaricamento della filigrana via fetch/blob...");
+                    const response = await fetch(watermarkUrl, { mode: 'cors' });
+                    if (!response.ok) throw new Error("Network fetch failed");
+                    const blob = await response.blob();
+                    const localBlobUrl = URL.createObjectURL(blob);
+                    
+                    watermarkImg = new Image();
+                    watermarkImg.src = localBlobUrl;
+                    await new Promise((resolveImg) => {
+                        watermarkImg!.onload = () => {
+                            console.log("Filigrana caricata con successo come blob locale.");
+                            resolveImg(true);
+                        };
+                        watermarkImg!.onerror = () => {
+                            URL.revokeObjectURL(localBlobUrl);
+                            console.warn("Non è stato possibile caricare l'immagine come blob locale.");
+                            resolveImg(false);
+                        };
+                    });
+                } catch (fetchErr) {
+                    console.warn("Errore fetch diretta Blob, uso fallback standard crossOrigin:", fetchErr);
+                    // Fallback a caricamento diretto standard
+                    watermarkImg = new Image();
+                    watermarkImg.crossOrigin = 'anonymous';
+                    watermarkImg.src = watermarkUrl;
+                    await new Promise((resolveImg) => {
+                        watermarkImg!.onload = () => {
+                            console.log("Filigrana caricata con successo in modalità crossOrigin.");
+                            resolveImg(true);
+                        };
+                        watermarkImg!.onerror = () => {
+                            console.warn("Impossibile caricare l'immagine con fallback crossOrigin.");
+                            watermarkImg = null; // Forza a null per evitare tentativi di disegno falliti
+                            resolveImg(false);
+                        };
+                    });
+                }
+            }
 
             // 1. SETUP VIDEO ELEMENT
             videoUrlToRevoke = URL.createObjectURL(videoFile);
@@ -188,45 +229,38 @@ export const addWatermarkToVideo = async (videoFile: File, settings?: any): Prom
                     // Disegna il video originale centrato per intero, senza stretch o allungamenti, entro i confini 9:16
                     ctx.drawImage(video, dX, dY, dWidth, dHeight);
 
-                    // Calcolo Watermark di Testo Digitato Dinamicamente (lettera per lettera)
-                    const elapsed = video.currentTime;
-                    const totalChars = watermarkText.length;
-                    const charsToShow = Math.min(totalChars, Math.floor(elapsed * typingSpeed));
-                    
-                    if (charsToShow > 0) {
-                        const textToShow = watermarkText.substring(0, charsToShow);
-                        
-                        // Font size come % dell'altezza 9:16 del canvas (height)
-                        const fontHeight = Math.round(height * (fontSizePercent / 100));
-                        ctx.font = `bold ${fontHeight}px sans-serif`;
-                        ctx.fillStyle = color;
+                    // Disegna l'immagine watermark (se caricata correttamente ed ha dimensioni valide)
+                    if (watermarkImg && watermarkImg.complete && watermarkImg.naturalWidth > 0 && watermarkImg.naturalHeight > 0) {
                         ctx.globalAlpha = opacity;
-                        ctx.textBaseline = 'middle';
                         
-                        // Padding proporzionale alle dimensioni del Canvas (5%)
-                        const paddingX = width * 0.05;
-                        const paddingY = height * 0.05;
+                        // Calcola larghezza e altezza in base alle impostazioni
+                        const w = Math.round(width * (widthPercent / 100));
+                        const imgRatio = watermarkImg.naturalWidth / watermarkImg.naturalHeight;
+                        const h = imgRatio > 0 ? Math.round(w / imgRatio) : 0;
                         
-                        const textMetrics = ctx.measureText(textToShow);
-                        const textWidth = textMetrics.width;
-                        
-                        // Allineamento Orizzontale
-                        let x = paddingX;
-                        if (hAlign === 'centeraligned') {
-                            x = (width - textWidth) / 2;
-                        } else if (hAlign === 'rightaligned') {
-                            x = width - textWidth - paddingX;
+                        if (w > 0 && h > 0) {
+                            // Padding proporzionale alle dimensioni del Canvas (5%)
+                            const paddingX = width * 0.05;
+                            const paddingY = height * 0.05;
+                            
+                            // Allineamento Orizzontale
+                            let x = paddingX;
+                            if (hAlign === 'centeraligned') {
+                                x = (width - w) / 2;
+                            } else if (hAlign === 'rightaligned') {
+                                x = width - w - paddingX;
+                            }
+                            
+                            // Allineamento Verticale
+                            let y = paddingY;
+                            if (vAlign === 'centreallinement') {
+                                y = (height - h) / 2;
+                            } else if (vAlign === 'bottomalligned') {
+                                y = height - h - paddingY;
+                            }
+                            
+                            ctx.drawImage(watermarkImg, x, y, w, h);
                         }
-                        
-                        // Allineamento Verticale
-                        let y = paddingY + fontHeight / 2;
-                        if (vAlign === 'centreallinement') {
-                            y = height / 2;
-                        } else if (vAlign === 'bottomalligned') {
-                            y = height - paddingY - fontHeight / 2;
-                        }
-                        
-                        ctx.fillText(textToShow, x, y);
                         ctx.globalAlpha = 1.0;
                     }
 

@@ -51,6 +51,7 @@ export interface AdminSettings {
   watermarkTypingSpeed?: number;
   watermarkOpacity?: number;
   watermarkColor?: string;
+  watermarkWidthPercent?: number;
   talentAcceptanceThresholdDays?: number;
   talentDeliveryThresholdDays?: number;
   talentCorrectionThresholdDays?: number;
