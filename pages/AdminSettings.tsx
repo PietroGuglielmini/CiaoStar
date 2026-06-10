@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { AdminSettings as SettingsType, EmailSettings } from '../types';
-import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings, seedDatabaseAndStructure, uploadBrandingLogo, deleteBrandingLogo } from '../services/dataService';
+import { AdminSettings as SettingsType, EmailSettings, StripeConfig } from '../types';
+import { getAdminSettings, updateAdminSettings, uploadWatermark, deleteWatermark, getEmailSettings, updateEmailSettings, seedDatabaseAndStructure, uploadBrandingLogo, deleteBrandingLogo, getStripeSecrets, updateStripeSecrets, getStripeConfig, updateStripeConfig } from '../services/dataService';
 import { Settings, Image as ImageIcon, Loader2, Save, Trash2, Upload, Percent, Clock, AlertTriangle, Bell, Globe, Database, CreditCard, Mail, Sliders, Sparkles } from 'lucide-react';
 
 const WatermarkLivePreview: React.FC<{ settings: SettingsType | null }> = ({ settings }) => {
@@ -71,6 +71,25 @@ const AdminSettings: React.FC = () => {
     const [smtpUser, setSmtpUser] = useState('');
     const [smtpPass, setSmtpPass] = useState('');
     const [smtpPort, setSmtpPort] = useState(587);
+
+    // Stripe secret fields (loaded from secure collection)
+    const [stripeSecretKey, setStripeSecretKey] = useState('');
+    const [stripeWebhookSecret, setStripeWebhookSecret] = useState('');
+
+    // Dynamic Stripe Configuration State
+    const [stripeConfig, setStripeConfigState] = useState<StripeConfig>({
+        mode: 'test',
+        connectType: 'express',
+        testPublishableKey: '',
+        testSecretKey: '',
+        testWebhookSecret: '',
+        testClientId: '',
+        livePublishableKey: '',
+        liveSecretKey: '',
+        liveWebhookSecret: '',
+        liveClientId: '',
+    });
+    const [savingStripeConfig, setSavingStripeConfig] = useState(false);
     
     // Watermark State
     const [watermarkFile, setWatermarkFile] = useState<File | null>(null);
@@ -152,6 +171,36 @@ const AdminSettings: React.FC = () => {
         if (data.watermarkUrl) setWatermarkPreview(data.watermarkUrl);
 
         try {
+            const secrets = await getStripeSecrets();
+            setStripeSecretKey(secrets.stripeSecretKey || (data as any).stripeSecretKey || '');
+            setStripeWebhookSecret(secrets.stripeWebhookSecret || (data as any).stripeWebhookSecret || '');
+        } catch (stripeErr) {
+            console.error("Error loading stripe secrets, falling back to public object:", stripeErr);
+            setStripeSecretKey((data as any).stripeSecretKey || '');
+            setStripeWebhookSecret((data as any).stripeWebhookSecret || '');
+        }
+
+        try {
+            const sc = await getStripeConfig();
+            if (sc) {
+                setStripeConfigState({
+                    mode: sc.mode || 'test',
+                    connectType: sc.connectType || 'express',
+                    testPublishableKey: sc.testPublishableKey || '',
+                    testSecretKey: sc.testSecretKey || '',
+                    testWebhookSecret: sc.testWebhookSecret || '',
+                    testClientId: sc.testClientId || '',
+                    livePublishableKey: sc.livePublishableKey || '',
+                    liveSecretKey: sc.liveSecretKey || '',
+                    liveWebhookSecret: sc.liveWebhookSecret || '',
+                    liveClientId: sc.liveClientId || '',
+                });
+            }
+        } catch (scErr) {
+            console.error("Error loading dynamic stripe config:", scErr);
+        }
+
+        try {
             const mailData = await getEmailSettings();
             if (mailData) {
                 setEmailSettings({
@@ -172,6 +221,20 @@ const AdminSettings: React.FC = () => {
     };
 
     useEffect(() => { load(); }, []);
+
+    const handleSaveStripeConfig = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSavingStripeConfig(true);
+        try {
+            await updateStripeConfig(stripeConfig);
+            toast.success("Configurazione dinamica Stripe salvata con successo in Firestore!");
+        } catch (err: any) {
+            console.error(err);
+            toast.error("Errore durante il salvataggio della configurazione Stripe: " + (err.message || err));
+        } finally {
+            setSavingStripeConfig(false);
+        }
+    };
 
     const handleSaveEmail = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -210,9 +273,22 @@ const AdminSettings: React.FC = () => {
         e.preventDefault();
         if (!settings) return;
         setSaving(true);
-        await updateAdminSettings(settings);
-        setSaving(false);
-        toast.success("Impostazioni salvate!");
+        try {
+            // Remove secret keys from public settings before updating to prevent security leaks
+            const publicSettings = { ...settings };
+            delete (publicSettings as any).stripeSecretKey;
+            delete (publicSettings as any).stripeWebhookSecret;
+            
+            await updateAdminSettings(publicSettings);
+            await updateStripeSecrets(stripeSecretKey, stripeWebhookSecret);
+            
+            toast.success("Impostazioni salvate con successo!");
+        } catch (err: any) {
+            console.error("Errore durante il salvataggio dei parametri:", err);
+            toast.error("Errore durante il salvataggio: " + (err.message || err));
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleWatermarkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -749,8 +825,8 @@ const AdminSettings: React.FC = () => {
                                 type="password" 
                                 placeholder="• • • • • • • • • • • •"
                                 className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
-                                value={settings?.stripeSecretKey ?? ''}
-                                onChange={e => setSettings({...settings!, stripeSecretKey: e.target.value})}
+                                value={stripeSecretKey}
+                                onChange={e => setStripeSecretKey(e.target.value)}
                             />
                         </div>
 
@@ -760,8 +836,8 @@ const AdminSettings: React.FC = () => {
                                 type="password" 
                                 placeholder="• • • • • • • • • • • •"
                                 className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors"
-                                value={settings?.stripeWebhookSecret ?? ''}
-                                onChange={e => setSettings({...settings!, stripeWebhookSecret: e.target.value})}
+                                value={stripeWebhookSecret}
+                                onChange={e => setStripeWebhookSecret(e.target.value)}
                             />
                         </div>
 
@@ -791,6 +867,161 @@ const AdminSettings: React.FC = () => {
                     <div className="pt-2">
                         <button disabled={saving} className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl transition-all">
                             {saving ? <Loader2 className="animate-spin mx-auto"/> : 'Salva Dominio & Stripe'}
+                        </button>
+                    </div>
+                </form>
+
+                {/* CONFIGURAZIONE STRIPE DINAMICA (TEST/LIVE) */}
+                <form onSubmit={handleSaveStripeConfig} className="bg-white rounded-[32px] p-8 border border-slate-100 shadow-sm space-y-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-50 pb-4 gap-2">
+                        <div>
+                            <h2 className="text-lg font-black text-slate-900 uppercase flex items-center gap-2">
+                                <CreditCard className="w-5 h-5 text-indigo-500" /> Configurazione Stripe Dinamica
+                            </h2>
+                            <p className="text-[11px] text-slate-400 font-semibold leading-relaxed mt-1">
+                                Gestisci l'ambiente Stripe (Test o Live Mode) e le chiavi API direttamente in database senza riscritture o riavvii.
+                            </p>
+                        </div>
+                        <span className={`self-start sm:self-center text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${stripeConfig.mode === 'live' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                            {stripeConfig.mode === 'live' ? '🚀 LIVE MODE ATTIVA' : '🧪 TEST MODE ATTIVA'}
+                        </span>
+                    </div>
+
+                    <div className="space-y-4">
+                        {/* 1. Toggle Switch - Test / Live */}
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Modalità Ambiente Stripe</label>
+                            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+                                <button
+                                    type="button"
+                                    onClick={() => setStripeConfigState(prev => ({ ...prev, mode: 'test' }))}
+                                    className={`py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${stripeConfig.mode === 'test' ? 'bg-amber-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'}`}
+                                >
+                                    🧪 Test Mode
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setStripeConfigState(prev => ({ ...prev, mode: 'live' }))}
+                                    className={`py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${stripeConfig.mode === 'live' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'}`}
+                                >
+                                    🚀 Live Mode
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 2. Connect Account Type Selector */}
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Tipo Account Stripe Connect da Utilizzare</label>
+                            <select
+                                className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                                value={stripeConfig.connectType}
+                                onChange={e => setStripeConfigState(prev => ({ ...prev, connectType: e.target.value as 'express' | 'custom' }))}
+                            >
+                                <option value="express">Express (Onboarding standard semplificato)</option>
+                                <option value="custom">Custom (Piena flessibilità e controllo)</option>
+                            </select>
+                        </div>
+
+                        {/* 3. Dynamic Fields based on Mode */}
+                        <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100 space-y-4">
+                            <h3 className="text-xs font-black text-slate-700 uppercase tracking-tight flex items-center gap-1.5">
+                                <Sliders className="w-4 h-4 text-indigo-400" />
+                                {stripeConfig.mode === 'test' ? 'Credenziali Stripe Sandbox (Test)' : 'Credenziali Stripe Reali (Live)'}
+                            </h3>
+
+                            {stripeConfig.mode === 'test' ? (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Publishable Key (Test)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="es. pk_test_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-indigo-500"
+                                            value={stripeConfig.testPublishableKey}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, testPublishableKey: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Secret Key (Test)</label>
+                                        <input
+                                            type="password"
+                                            placeholder="es. sk_test_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-indigo-500"
+                                            value={stripeConfig.testSecretKey}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, testSecretKey: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Webhook Secret (Test)</label>
+                                        <input
+                                            type="password"
+                                            placeholder="es. whsec_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-indigo-500"
+                                            value={stripeConfig.testWebhookSecret}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, testWebhookSecret: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Connect Client ID (Test)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="es. ca_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-indigo-500"
+                                            value={stripeConfig.testClientId}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, testClientId: e.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Publishable Key (Live)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="es. pk_live_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-emerald-500"
+                                            value={stripeConfig.livePublishableKey}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, livePublishableKey: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Secret Key (Live)</label>
+                                        <input
+                                            type="password"
+                                            placeholder="es. sk_live_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-emerald-500"
+                                            value={stripeConfig.liveSecretKey}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, liveSecretKey: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Webhook Secret (Live)</label>
+                                        <input
+                                            type="password"
+                                            placeholder="es. whsec_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-emerald-500"
+                                            value={stripeConfig.liveWebhookSecret}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, liveWebhookSecret: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">Connect Client ID (Live)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="es. ca_..."
+                                            className="w-full bg-white border border-slate-100 rounded-xl p-3 text-xs font-mono font-bold focus:outline-none focus:border-emerald-500"
+                                            value={stripeConfig.liveClientId}
+                                            onChange={e => setStripeConfigState(prev => ({ ...prev, liveClientId: e.target.value }))}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="pt-2">
+                        <button disabled={savingStripeConfig} className={`w-full text-white py-4 rounded-2xl font-black text-sm uppercase shadow-xl transition-all cursor-pointer ${stripeConfig.mode === 'live' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-slate-900 hover:bg-black'}`}>
+                            {savingStripeConfig ? <Loader2 className="animate-spin mx-auto"/> : `Salva Configurazione Stripe (${stripeConfig.mode.toUpperCase()})`}
                         </button>
                     </div>
                 </form>

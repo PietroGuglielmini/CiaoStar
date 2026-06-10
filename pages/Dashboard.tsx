@@ -178,6 +178,42 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+
+  const validateAndSetVideo = (file: File | null) => {
+      if (!file) {
+          setUploadFile(null);
+          return;
+      }
+      
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.src = URL.createObjectURL(file);
+      video.onloadedmetadata = () => {
+          URL.revokeObjectURL(video.src);
+          const w = video.videoWidth;
+          const h = video.videoHeight;
+          if (w > 0 && h > 0) {
+              if (w > h) {
+                  toast.error("⚠️ FORMATO ORIZZONTALE RILEVATO: I video devono essere caricati esclusivamente in formato VERTICALE 9:16 (registrati tenendo lo smartphone in verticale).");
+                  setUploadFile(null);
+                  return;
+              }
+              const ratio = h / w;
+              // 16:9 is 1.777. Any ratio less than 1.3 is too close to landscape or standard 4:3.
+              if (ratio < 1.3) {
+                  toast.error("⚠️ ASPECT RATIO ERRATO: Il video caricato non ha un formato verticale valido (consigliato 9:16). Inquadra il soggetto tenendo lo smartphone in verticale.");
+                  setUploadFile(null);
+                  return;
+              }
+          }
+          setUploadFile(file);
+      };
+      video.onerror = () => {
+          // Fallback se la lettura dei metadati fallisce
+          setUploadFile(file);
+      };
+  };
+
   const [forceShowSelectorId, setForceShowSelectorId] = useState<string | null>(null);
   const [qualityCheck, setQualityCheck] = useState({
       nameSaid: false,
@@ -342,7 +378,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const handleUseRecording = (orderId: string) => {
       if (!recordedBlob) return;
       const file = new File([recordedBlob], `registrazione_${orderId}.webm`, { type: recordedBlob.type || 'video/webm' });
-      setUploadFile(file);
+      validateAndSetVideo(file);
       setActiveTab('upload');
       toast.success("Registrazione in-app impostata come file video pronto per il caricamento!");
   };
@@ -445,8 +481,11 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   const statusMap: Record<RequestStatus, string> = {
     [RequestStatus.PENDING]: 'In attesa',
+    [RequestStatus.PENDING_PAYMENT]: 'Pagamento in sospeso',
+    [RequestStatus.PAID_AWAITING_VIDEO]: 'Pagato, in attesa del video',
     [RequestStatus.ACCEPTED]: 'Accettato',
-    [RequestStatus.COMPLETED]: 'Consegnato',
+    [RequestStatus.DELIVERED]: 'Consegnato (Da Approvare)',
+    [RequestStatus.COMPLETED]: 'Completato',
     [RequestStatus.REJECTED]: 'Rifiutato',
     [RequestStatus.EXPIRED]: 'Scaduto',
     [RequestStatus.REFUNDED]: 'Rimborsato',
@@ -454,7 +493,9 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     [RequestStatus.CANCELED_BY_FAN]: 'Annullato da te',
     [RequestStatus.IN_REVIEW]: 'In revisione',
     [RequestStatus.DISPUTE_OPEN]: 'Disputa aperta',
-    [RequestStatus.CORRECTION_NEEDED]: 'Correzione richiesta'
+    [RequestStatus.IN_DISPUTE]: 'Disputa aperta',
+    [RequestStatus.CORRECTION_NEEDED]: 'Correzione richiesta',
+    [RequestStatus.ACTION_REQUIRED]: 'Azione richiesta'
   };
 
   // System for Toast Notifications
@@ -518,13 +559,27 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
     isInitialRef.current = true;
     const unsub = subscribeToRequestsForUser(user.id, user.role, (updatedRequests) => {
+        const isTalentUser = user.role === UserRole.TALENT;
+        const filteredRequests = isTalentUser
+            ? updatedRequests.filter(req => [
+                RequestStatus.PAID_AWAITING_VIDEO,
+                RequestStatus.ACCEPTED,
+                RequestStatus.DELIVERED,
+                RequestStatus.COMPLETED,
+                RequestStatus.IN_REVIEW,
+                RequestStatus.DISPUTE_OPEN,
+                RequestStatus.IN_DISPUTE,
+                RequestStatus.CORRECTION_NEEDED,
+                RequestStatus.ACTION_REQUIRED
+              ].includes(req.status))
+            : updatedRequests;
+
         if (isInitialRef.current) {
-            setRequests(updatedRequests);
+            setRequests(filteredRequests);
             isInitialRef.current = false;
             setLoading(false);
         } else {
             const prevRequests = requestsRef.current;
-            const isTalentUser = user.role === UserRole.TALENT;
             
             updatedRequests.forEach(req => {
                 const prevReq = prevRequests.find(r => r.id === req.id);
@@ -552,7 +607,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                 }
             });
             
-            setRequests(updatedRequests);
+            setRequests(filteredRequests);
         }
     });
 
@@ -870,10 +925,14 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       if (activeFilter === 'PENDING') {
           return [
               RequestStatus.PENDING,
+              RequestStatus.PENDING_PAYMENT,
+              RequestStatus.PAID_AWAITING_VIDEO,
               RequestStatus.ACCEPTED,
               RequestStatus.CORRECTION_NEEDED,
               RequestStatus.IN_REVIEW,
-              RequestStatus.DISPUTE_OPEN
+              RequestStatus.DISPUTE_OPEN,
+              RequestStatus.IN_DISPUTE,
+              RequestStatus.ACTION_REQUIRED
           ].includes(req.status);
       }
       if (activeFilter === 'COMPLETED') {
@@ -893,7 +952,17 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   const stats = {
       total: requests.length,
-      pending: requests.filter(r => r.status === RequestStatus.PENDING).length,
+      pending: requests.filter(r => [
+          RequestStatus.PENDING,
+          RequestStatus.PENDING_PAYMENT,
+          RequestStatus.PAID_AWAITING_VIDEO,
+          RequestStatus.ACCEPTED,
+          RequestStatus.CORRECTION_NEEDED,
+          RequestStatus.IN_REVIEW,
+          RequestStatus.DISPUTE_OPEN,
+          RequestStatus.IN_DISPUTE,
+          RequestStatus.ACTION_REQUIRED
+      ].includes(r.status)).length,
       completed: completedRequests.length,
       grossEarnings: completedRequests.reduce((acc, r) => acc + r.pricePaid, 0),
       totalFees: completedRequests.reduce((acc, r) => acc + (r.applicationFee || 0), 0),
@@ -968,38 +1037,38 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
             <div className="bg-slate-900 text-white rounded-[2rem] p-8 mb-10 border border-slate-950 shadow-xl text-left space-y-6">
                 <div>
                     <h3 className="text-sm font-black uppercase text-indigo-400 tracking-wider">Statistiche di Visibilità & Conversioni (Insights)</h3>
-                    <p className="text-[11px] text-slate-400 font-medium">Analizza l'andamento del tuo profilo e trova suggerimenti utili per massimizzare le tue vendite.</p>
+                    <p className="text-[11px] text-slate-300 font-medium">Analizza l'andamento del tuo profilo e trova suggerimenti utili per massimizzare le tue vendite.</p>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-2">
-                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Impression (Risultati di Ricerca)</div>
+                        <div className="text-[10px] font-black uppercase text-slate-300 tracking-wider">Impression (Risultati di Ricerca)</div>
                         <div className="text-3xl font-black text-white">{user.impressionsCount ?? 0}</div>
-                        <div className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                        <div className="text-[10px] text-slate-200 leading-relaxed font-semibold">
                             Numero di volte che la tua scheda Star è comparsa nei risultati di ricerca o nella galleria dei filtri della homepage.
                         </div>
                     </div>
 
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-2">
-                        <div className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">Visualizzazioni Profilo</div>
+                        <div className="text-[10px] font-black uppercase text-indigo-300 tracking-wider">Visualizzazioni Profilo</div>
                         <div className="text-3xl font-black text-white">{user.profileViews ?? 0}</div>
-                        <div className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                        <div className="text-[10px] text-slate-200 leading-relaxed font-semibold">
                             Numero di visite uniche sul tuo profilo personale. Questa metrica indica quanti utenti si sono interessati ai tuoi dettagli.
                         </div>
                     </div>
 
                     <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-2">
-                        <div className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">CTR / Conversione Vendite</div>
+                        <div className="text-[10px] font-black uppercase text-emerald-300 tracking-wider">CTR / Conversione Vendite</div>
                         <div className="text-3xl font-black text-white">
                             {user.profileViews ? ((stats.total / user.profileViews) * 100).toFixed(1) : '0.0'}%
                         </div>
-                        <div className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                        <div className="text-[10px] text-slate-200 leading-relaxed font-semibold">
                             Percentuale di clic e ordini iniziati rispetto alle visualizzazioni reali del tuo profilo. Un tasso medio sano è tra il 2% e l'8%.
                         </div>
                     </div>
                 </div>
 
-                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] text-slate-400 font-semibold leading-relaxed">
+                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] text-slate-200 font-semibold leading-relaxed">
                     💡 Suggerimento: Se il tuo CTR è basso, ti consigliamo di caricare un video di invito/benvenuto stimolante per convincere i visitatori o di regolare la tua fascia di prezzo per allinearti alla domanda.
                 </div>
             </div>
@@ -1032,7 +1101,17 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                                 : 'bg-white text-slate-600 border border-gray-200 hover:bg-slate-50'
                         }`}
                     >
-                        In Attesa ({requests.filter(r => [RequestStatus.PENDING, RequestStatus.ACCEPTED, RequestStatus.CORRECTION_NEEDED, RequestStatus.IN_REVIEW, RequestStatus.DISPUTE_OPEN].includes(r.status)).length})
+                        In Attesa ({requests.filter(r => [
+                            RequestStatus.PENDING,
+                            RequestStatus.PENDING_PAYMENT,
+                            RequestStatus.PAID_AWAITING_VIDEO,
+                            RequestStatus.ACCEPTED,
+                            RequestStatus.CORRECTION_NEEDED,
+                            RequestStatus.IN_REVIEW,
+                            RequestStatus.DISPUTE_OPEN,
+                            RequestStatus.IN_DISPUTE,
+                            RequestStatus.ACTION_REQUIRED
+                        ].includes(r.status)).length})
                     </button>
                     <button
                         onClick={() => setActiveFilter('COMPLETED')}
@@ -1223,13 +1302,23 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                                                                 </div>
 
                                                                 {activeTab === 'upload' ? (
-                                                                    <div className="space-y-4">
+                                                                    <div className="space-y-4 font-sans">
+                                                                        <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl flex gap-3 text-left">
+                                                                            <Info className="w-5 h-5 text-indigo-500 flex-shrink-0 mt-0.5" />
+                                                                            <div>
+                                                                                <h4 className="text-xs font-black text-indigo-950 uppercase tracking-tight">Formato Richiesto: Verticale 9:16</h4>
+                                                                                <p className="text-[11px] text-indigo-800 font-medium leading-relaxed mt-0.5">
+                                                                                    ⚠️ <strong>Importante:</strong> I video di risposta devono essere caricati esclusivamente in <strong>formato verticale (9:16)</strong>, come quelli registrati da smartphone per TikTok o Reels. Il caricamento di video orizzontali non è consentito.
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+
                                                                         <label className="flex flex-col items-center justify-center py-8 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-white transition-all group">
                                                                             <Upload className="w-8 h-8 text-slate-300 group-hover:text-indigo-600 mb-2 transition-colors" />
                                                                             <span className="text-sm font-bold text-slate-500">
                                                                                 {uploadFile ? uploadFile.name : 'Seleziona file video o trascinalo qui'}
                                                                             </span>
-                                                                            <input type="file" className="hidden" accept="video/*" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                                                                            <input type="file" className="hidden" accept="video/*" onChange={(e) => validateAndSetVideo(e.target.files?.[0] || null)} />
                                                                         </label>
 
                                                                         {uploadFile && (
@@ -1630,6 +1719,20 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                                                             )}
                                                         </div>
                                                     )}
+                                                </div>
+                                            ) : req.status === RequestStatus.PENDING_PAYMENT ? (
+                                                <div className="text-center px-6 w-full py-4 space-y-4">
+                                                    <CreditCard className="w-12 h-12 mb-3 mx-auto text-amber-500 opacity-85" />
+                                                    <span className="block text-sm font-black uppercase tracking-widest text-amber-600">Pagamento In Sospeso</span>
+                                                    <p className="text-xs text-slate-500 font-bold max-w-xs mx-auto leading-relaxed font-sans">
+                                                        La prenotazione è stata impostata con successo ma aspetta il saldo. Clicca di seguito per completare in sicurezza.
+                                                    </p>
+                                                    <button
+                                                        onClick={() => navigate(`/talent/${req.talentId}?orderId=${req.id}`)}
+                                                        className="flex items-center justify-center gap-2 py-3.5 px-6 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs uppercase rounded-xl shadow-lg shadow-amber-100/50 transition-all font-sans cursor-pointer w-full max-w-xs mx-auto active:scale-95 duration-250 border border-amber-400"
+                                                    >
+                                                        <CreditCard className="w-4 h-4" /> Completa Ordine
+                                                    </button>
                                                 </div>
                                             ) : (
                                                 <>

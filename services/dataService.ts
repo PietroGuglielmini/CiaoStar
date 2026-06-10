@@ -6,7 +6,7 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, SettableMetadata, deleteObject, uploadBytesResumable } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { Talent, User, UserRole, VideoRequest, RequestStatus, AdminSettings, AuditLog, ChatMessage, Conversation, VerificationStatus, DisputeCategory, InAppNotification, Review, EmailSettings } from '../types';
+import { Talent, User, UserRole, VideoRequest, RequestStatus, AdminSettings, AuditLog, ChatMessage, Conversation, VerificationStatus, DisputeCategory, InAppNotification, Review, EmailSettings, StripeConfig } from '../types';
 import { ADMIN_EMAIL, DEFAULT_ADMIN_SETTINGS, DB_CATEGORIES_SEED } from '../constants';
 import { addWatermarkToVideo } from './videoUtils';
 
@@ -18,6 +18,45 @@ export const getAdminSettings = async (): Promise<AdminSettings> => {
     if (snap.exists()) return snap.data() as AdminSettings;
     await setDoc(settingsRef, { ...DEFAULT_ADMIN_SETTINGS });
     return DEFAULT_ADMIN_SETTINGS;
+};
+
+export const getStripeSecrets = async (): Promise<{ stripeSecretKey: string; stripeWebhookSecret: string }> => {
+    const secretsRef = doc(db, 'secrets', 'stripe');
+    const snap = await getDoc(secretsRef);
+    if (snap.exists()) {
+        const data = snap.data();
+        return {
+            stripeSecretKey: data?.stripeSecretKey || '',
+            stripeWebhookSecret: data?.stripeWebhookSecret || '',
+        };
+    }
+    return { stripeSecretKey: '', stripeWebhookSecret: '' };
+};
+
+export const updateStripeSecrets = async (stripeSecretKey: string, stripeWebhookSecret: string) => {
+    const secretsRef = doc(db, 'secrets', 'stripe');
+    await setDoc(secretsRef, {
+        stripeSecretKey: stripeSecretKey.trim(),
+        stripeWebhookSecret: stripeWebhookSecret.trim(),
+        updatedAt: new Date().toISOString()
+    }, { merge: true });
+};
+
+export const getStripeConfig = async (): Promise<StripeConfig | null> => {
+    const configRef = doc(db, '_platform_secrets', 'stripe_config');
+    const snap = await getDoc(configRef);
+    if (snap.exists()) {
+        return snap.data() as StripeConfig;
+    }
+    return null;
+};
+
+export const updateStripeConfig = async (config: StripeConfig) => {
+    const configRef = doc(db, '_platform_secrets', 'stripe_config');
+    await setDoc(configRef, {
+        ...config,
+        updatedAt: new Date().toISOString()
+    });
 };
 
 export const updateAdminSettings = async (data: Partial<AdminSettings>) => {
@@ -635,46 +674,53 @@ export const createRequest = async (
     const expirationDate = new Date(now.getTime() + daysToExpiration * 24 * 60 * 60 * 1000);
     
     let commissionPercent = settings.platformFeePercent !== undefined ? settings.platformFeePercent : 20;
+    let taxRegime: 'ordinario' | 'forfettario' = 'forfettario';
     try {
         const talentDoc = await getDoc(doc(db, 'users', requestData.talentId));
         if (talentDoc.exists()) {
-            const talentData = talentDoc.data() as User;
+            const talentData = talentDoc.data() as any;
             if (talentData.customCommissionPercent !== undefined && talentData.customCommissionPercent !== null) {
                 commissionPercent = talentData.customCommissionPercent;
             }
+            if (talentData.tax_regime === 'ordinario' || talentData.tax_regime === 'forfettario') {
+                taxRegime = talentData.tax_regime;
+            }
         }
     } catch (e) {
-        console.error("Errore nel recuperare la commissione personalizzata del talent:", e);
+        console.error("Errore nel recuperare la commissione personalizzata e il regime fiscale del talent:", e);
     }
     
-    const appFee = (requestData.pricePaid * commissionPercent) / 100;
+    const basePrice = requestData.pricePaid;
+    let finalPricePaid = basePrice;
+    let finalApplicationFee = 0;
+    
+    const baseFee = (basePrice * commissionPercent) / 100;
+    if (taxRegime === 'ordinario') {
+        finalPricePaid = Number((basePrice * 1.22).toFixed(2));
+        finalApplicationFee = Number((baseFee * 1.22).toFixed(2));
+    } else {
+        finalPricePaid = Number(basePrice.toFixed(2));
+        finalApplicationFee = Number((baseFee * 1.22).toFixed(2));
+    }
 
     const finalOrder: Omit<VideoRequest, 'id'> = {
         ...requestData,
-        status: RequestStatus.PENDING,
+        pricePaid: finalPricePaid,
+        applicationFee: finalApplicationFee,
+        status: RequestStatus.PENDING_PAYMENT,
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
-        applicationFee: appFee,
         maxDeliveryDaysSnapshot: daysToExpiration,
         expirationTimestamp: expirationDate.toISOString(),
         history: [{
             action: "Richiesta creata dal Fan",
             timestamp: now.toISOString(),
-            note: `Destinatario: ${requestData.recipientName}, Occasione: ${requestData.occasion}`
+            note: `Destinatario: ${requestData.recipientName}, Occasione: ${requestData.occasion} (Regime: ${taxRegime.toUpperCase()})`
         }]
     };
 
     const docRef = await addDoc(collection(db, 'orders'), finalOrder);
     
-    // Notifica per la Star ricevente
-    await createNotification(
-        requestData.talentId,
-        "Nuova richiesta ricevuta!",
-        `Hai ricevuto una nuova richiesta da parte di ${requestData.fanName} per ${requestData.recipientName}!`,
-        docRef.id,
-        'orderCreated'
-    );
-
     return docRef.id;
 };
 
@@ -772,7 +818,7 @@ export const correctVideoRequest = async (
         recipientName: data.recipientName.trim(),
         instructions: data.instructions.trim(),
         occasion: data.occasion.trim(),
-        status: RequestStatus.PENDING,
+        status: RequestStatus.PENDING_PAYMENT,
         correctionCount,
         history: [...history, newEvent],
         updatedAt: new Date().toISOString()
@@ -1151,6 +1197,15 @@ export const getAllOrdersAdmin = async (): Promise<VideoRequest[]> => {
     const snap = await getDocs(q);
     const results = snap.docs.map(d => ({ id: d.id, ...d.data() } as VideoRequest));
     return await checkAndApplyAutoDeletion(results);
+};
+
+export const getRequestById = async (requestId: string): Promise<VideoRequest | null> => {
+    const orderRef = doc(db, 'orders', requestId);
+    const snap = await getDoc(orderRef);
+    if (snap.exists()) {
+        return { id: snap.id, ...snap.data() } as VideoRequest;
+    }
+    return null;
 };
 
 export const getRequestsForUser = async (userId: string, role: UserRole): Promise<VideoRequest[]> => {

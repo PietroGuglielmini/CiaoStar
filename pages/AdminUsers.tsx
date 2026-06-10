@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { User, UserRole } from '../types';
-import { getUsersAdminPaginated, createPreCreatedTalent, updateUserDisabledStatus, updateTalentCustomCommission, createNotification } from '../services/dataService';
+import { getUsersAdminPaginated, createPreCreatedTalent, updateUserDisabledStatus, updateTalentCustomCommission, createNotification, updateTalentProfile } from '../services/dataService';
 import { 
     Users, Search, LogIn, Loader2, User as UserIcon, RefreshCw, Filter, 
     ArrowUpDown, ShieldAlert, Star, Ban, CheckCircle, Bell, AlertTriangle, Send,
@@ -209,14 +209,14 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
                         <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
                             <Star className="w-5 h-5 text-indigo-400 fill-current" /> Registra Nuovo Profilo Talent
                         </h2>
-                        <p className="text-[11px] text-slate-400 font-bold uppercase mt-1">
+                        <p className="text-[11px] text-slate-300 font-bold uppercase mt-1">
                             L'utente potrà accedere tramite quella Gmail per personalizzare e gestire il proprio profilo Star.
                         </p>
                     </div>
 
                     <form onSubmit={handleCreateTalent} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Nome d'Arte della Star</label>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-300">Nome d'Arte della Star</label>
                             <input 
                                 type="text" 
                                 placeholder="Esempio: Vasco Rossi"
@@ -227,7 +227,7 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Indirizzo Gmail del Talent</label>
+                            <label className="text-[10px] font-black uppercase tracking-wider text-slate-300">Indirizzo Gmail del Talent</label>
                             <input 
                                 type="email" 
                                 placeholder="esempio@gmail.com"
@@ -432,13 +432,14 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
                                         <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Iscrizione</th>
                                         <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest">Stato</th>
                                         <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Commissione</th>
+                                        <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Regime Fiscale</th>
                                         <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">Azioni</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {filteredUsers.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} className="p-20 text-center text-slate-300 font-bold uppercase italic">
+                                            <td colSpan={8} className="p-20 text-center text-slate-300 font-bold uppercase italic">
                                                 Nessun utente trovato con questi criteri.
                                             </td>
                                         </tr>
@@ -523,6 +524,30 @@ const AdminUsers: React.FC<AdminUsersProps> = ({ onImpersonate }) => {
                                                         </div>
                                                     ) : (
                                                         <span className="text-[10px] font-bold text-slate-400 uppercase">Default</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-6 text-center">
+                                                    {u.role === UserRole.TALENT ? (
+                                                        <select 
+                                                            value={u.tax_regime || 'forfettario'}
+                                                            onChange={async (e) => {
+                                                                const val = e.target.value as 'forfettario' | 'ordinario';
+                                                                setUsers(prev => prev.map(item => item.id === u.id ? { ...item, tax_regime: val } : item));
+                                                                try {
+                                                                    await updateTalentProfile(u.id, { tax_regime: val });
+                                                                    toast.success(`Regime fiscale agg. a ${val.toUpperCase()} per ${u.name}`);
+                                                                } catch (err: any) {
+                                                                    console.error("Errore aggiornamento:", err);
+                                                                    toast.error("Errore aggiornamento regime");
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 text-xs font-bold border border-slate-200 rounded-lg text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer"
+                                                        >
+                                                            <option value="forfettario">Forfettario</option>
+                                                            <option value="ordinario">Ordinario</option>
+                                                        </select>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-slate-400">-</span>
                                                     )}
                                                 </td>
                                                 <td className="p-6 text-right">

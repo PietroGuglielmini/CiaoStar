@@ -131,6 +131,8 @@ export interface User {
   unbanRequestText?: string;
   unbanRequestStatus?: 'NONE' | 'PENDING' | 'REJECTED';
   unbanRequestTimestamp?: string;
+  tax_regime?: 'ordinario' | 'forfettario';
+  taxRegime?: 'ordinario' | 'forfettario';
   preferences?: {
     marketingEnabled: boolean;
   };
@@ -174,6 +176,9 @@ export interface VideoRequest {
   videoId?: string;
   stripePaymentIntentId?: string;
   isFastDelivery?: boolean;
+  taxRegime?: 'ordinario' | 'forfettario';
+  tax_regime?: 'ordinario' | 'forfettario';
+  basePrice?: number;
   adminNoteFan?: string;
   adminNoteTalent?: string;
   disputeReason?: string;
@@ -271,6 +276,20 @@ export interface PaymentResponse {
   transactionId?: string;
   redirectUrl?: string; // Utile per PayPal o 3D Secure di Stripe
   error?: string;
+}
+
+export interface StripeConfig {
+  mode: 'test' | 'live';
+  connectType: 'express' | 'custom';
+  testPublishableKey: string;
+  testSecretKey: string;
+  testWebhookSecret: string;
+  testClientId: string;
+  livePublishableKey: string;
+  liveSecretKey: string;
+  liveWebhookSecret: string;
+  liveClientId: string;
+  updatedAt?: string;
 }
 
 

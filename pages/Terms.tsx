@@ -1,13 +1,32 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getAdminSettings } from '../services/dataService';
 
 const Terms: React.FC = () => {
   const navigate = useNavigate();
+  const [companyName, setCompanyName] = useState('Guglielmini S.R.L.');
+  const [companyVat, setCompanyVat] = useState('IT12345678901');
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    const fetchLegalSettings = async () => {
+      try {
+        const settings = await getAdminSettings();
+        if (settings) {
+          if (settings.legalBusinessName) {
+            setCompanyName(settings.legalBusinessName);
+          }
+          if (settings.legalVatNumber) {
+            setCompanyVat(settings.legalVatNumber);
+          }
+        }
+      } catch (err) {
+        console.error("Errore durante il recupero dei dati societari legali:", err);
+      }
+    };
+    fetchLegalSettings();
   }, []);
 
   return (
@@ -74,14 +93,25 @@ const Terms: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 uppercase mb-4">4. TERMINI E CONDIZIONI PER I VIP (VENDITORI)</h2>
-              <h3 className="font-bold text-slate-900 mb-2">4.1 Autonomia, Natura del Rapporto e Responsabilità Fiscale (Adempimenti Italiani)</h3>
+              <h3 className="font-bold text-slate-900 mb-2">4.1 Autonomia, Natura del Rapporto, Fatturazione e Obblighi Fiscali</h3>
               <p>Il VIP (o "Talent") opera e agisce in qualità di professionista autonomo o prestatore occasionale indipendente, escludendo tassativamente qualsiasi rapporto di lavoro subordinato, para-subordinato, agenzia o associazione in partecipazione con CiaoStar.</p>
-              <p className="mt-2">In conformità con il regime tributario della Repubblica Italiana (Agenzia delle Entrate) e le direttive europee DAC7, si stabilisce quanto segue:</p>
-              <ul className="list-disc pl-5 space-y-2 mt-2 font-semibold">
-                <li><strong>Autonomia Fiscale:</strong> Il VIP è l'unico ed esclusivo responsabile per la corretta qualificazione del proprio reddito (es. prestazione di lavoro autonomo occasionale ex art. 67 lett. l del TUIR, o attività d'impresa/professionale con Partita IVA) e per l’adempimento di tutti i relativi obblighi dichiarativi e di versamento delle imposte (IRPEF, IVA, contributi previdenziali INPS, ecc.).</li>
-                <li><strong>Fatturazione e Ricevute:</strong> Poiché CiaoStar agisce esclusivamente come intermediario tecnico e mandatario all'incasso, la transazione economica per la vendita del Video-Messaggio avviene direttamente tra il Fan (acquirente) e il VIP (venditore). Il VIP si assume l’obbligo di emettere idonea documentazione fiscale (es. ricevuta generica con ritenuta d'acconto se applicabile, o fattura elettronica con applicazione di IVA o in regime di esonero come il regime forfettario) direttamente a favore del Fan, qualora richiesto.</li>
-                <li><strong>Fattura delle Commissioni (Autofatturazione / Connect Fee):</strong> CiaoStar emetterà regolarmente fattura elettronica nei confronti del VIP per la Commissione del Servizio (Platform Fee) trattenuta in automatico su ciascuna transazione riuscita. Il VIP autorizza CiaoStar e il gestore dei servizi finanziari (Stripe Connect) a trattenere tale commissione all'origine prima dell'erogazione dei fondi sul saldo disponibile.</li>
-              </ul>
+              
+              <div className="mt-4 space-y-4">
+                <p><strong>4.1.1. Natura dell'Intermediazione</strong><br />
+                CiaoStar, gestita da <span className="text-slate-900 font-bold">{companyName}</span>, agisce esclusivamente quale fornitore di servizi tecnologici e di intermediazione. La piattaforma mette a disposizione l'infrastruttura per facilitare l'incontro e l'interazione tra il Creatore (Talent) e l'Acquirente (Fan), ma non è in alcun caso parte del contratto di compravendita del Video Personalizzato.</p>
+
+                <p><strong>4.1.2. Contratto di Vendita e Corrispettivi</strong><br />
+                Il contratto per la realizzazione e la fornitura del Video Personalizzato si intende stipulato in via esclusiva e diretta tra il Talent e il Fan. L'intero corrispettivo pagato dal Fan (al lordo delle commissioni di piattaforma) costituisce reddito diretto del Talent.</p>
+
+                <p><strong>4.1.3. Obblighi Fiscali e Fatturazione del Talent</strong><br />
+                Il Talent riconosce e accetta di essere l'unico ed esclusivo responsabile per la dichiarazione, la liquidazione e il versamento di qualsiasi imposta, tassa, IVA o onere previdenziale derivante dai compensi generati tramite CiaoStar. È esclusiva responsabilità del Talent emettere regolare ricevuta o fattura nei confronti del Fan per l'intero importo della transazione, in conformità alle normative del proprio regime fiscale di appartenenza.</p>
+
+                <p><strong>4.1.4. Fatturazione di {companyName}</strong><br />
+                <span className="text-slate-900 font-bold">{companyName}</span> provvederà a emettere regolare fattura esclusivamente nei confronti del Talent per le trattenute relative ai servizi di utilizzo della piattaforma (Commissioni o Fee di Servizio).</p>
+
+                <p><strong>4.1.5. Clausola di Manleva</strong><br />
+                Il Talent si impegna fin da ora a tenere integralmente indenne e manlevare <span className="text-slate-900 font-bold">{companyName}</span> da qualsiasi richiesta, sanzione, accertamento, pretesa o contenzioso avanzato dall'Agenzia delle Entrate, da Enti Previdenziali o da terzi, che sia riconducibile a omissioni, ritardi, irregolarità o violazioni degli adempimenti fiscali e amministrativi di esclusiva competenza del Talent.</p>
+              </div>
 
               <h3 className="font-bold text-slate-900 mt-6 mb-2">4.2 Obbligo di Autenticità (NO AI / NO DELEGHE)</h3>
               <ul className="list-disc pl-5 space-y-2">
@@ -123,7 +153,7 @@ const Terms: React.FC = () => {
             <section>
               <h2 className="text-xl font-black text-slate-900 uppercase mb-4">7. LIMITAZIONE DI RESPONSABILITÀ E MANLEVA</h2>
               <p><strong>7.1 Esclusione Garanzie Tecniche.</strong> CiaoStar fornisce la Piattaforma "così com'è" (As-Is). Non garantiamo che il servizio sarà ininterrotto, privo di errori o sicuro da attacchi informatici, sebbene ci impegniamo ad adottare le migliori misure di sicurezza.</p>
-              <p className="mt-4"><strong>7.2 Responsabilità sui Contenuti (Manleva VIP).</strong> Il VIP è l'unico responsabile legale dei contenuti caricati. Il VIP si impegna a manlevare e tenere indenne CiaoStar s.r.l., i suoi amministratori e dipendenti da qualsiasi richiesta risarcitoria, sanzione, spesa legale o danno derivante da:</p>
+              <p className="mt-4"><strong>7.2 Responsabilità sui Contenuti (Manleva VIP).</strong> Il VIP è l'unico responsabile legale dei contenuti caricati. Il VIP si impegna a manlevare e tenere indenne <span className="text-slate-900 font-bold">{companyName}</span>, i suoi amministratori e dipendenti da qualsiasi richiesta risarcitori, sanzione, spesa legale o danno derivante da:</p>
               <ul className="list-disc pl-5 space-y-2 mt-4">
                 <li>Violazione di copyright (es. cantare brani protetti, indossare marchi non autorizzati).</li>
                 <li>Contenuti diffamatori, osceni o illegali prodotti dal VIP.</li>
@@ -134,7 +164,7 @@ const Terms: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 uppercase mb-4">8. PROPRIETÀ INTELLETTUALE DELLA PIATTAFORMA</h2>
-              <p>Tutti i diritti sul software, design, marchio "CiaoStar", codice sorgente e database sono di proprietà esclusiva di CiaoStar s.r.l. È vietata la copia, il reverse engineering o l'uso non autorizzato del marchio.</p>
+              <p>Tutti i diritti sul software, design, marchio "CiaoStar", codice sorgente e database sono di proprietà esclusiva di <span className="text-slate-900 font-bold">{companyName}</span>. È vietata la copia, il reverse engineering o l'uso non autorizzato del marchio.</p>
             </section>
 
             <section>

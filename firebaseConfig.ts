@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import * as firebaseAuth from 'firebase/auth';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getFirestore, persistentLocalCache, persistentMultipleTabManager, initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getMessaging } from 'firebase/messaging';
 
@@ -25,9 +25,8 @@ export const facebookProvider = new firebaseAuth.FacebookAuthProvider();
 export const microsoftProvider = new firebaseAuth.OAuthProvider('microsoft.com');
 microsoftProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Initialize Firestore with experimentalForceLongPolling and persistent offline local cache to fix WebSocket / connection blockings in secure sandbox iframe environments
+// Initialize Firestore without experimentalForceLongPolling to avoid WebChannelConnection 'Listen' stream errors
 export const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true,
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 

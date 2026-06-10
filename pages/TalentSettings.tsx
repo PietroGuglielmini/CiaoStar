@@ -3,7 +3,6 @@ import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Talent, User, AdminSettings, InAppNotificationSettings } from '../types';
 import { syncUserToDB, updateTalentProfile, getCategories, uploadAvatar, uploadIntroVideo, getAdminSettings, callStripeOnboardTalent, deleteUserAccount } from '../services/dataService';
-import { moderateText } from '../services/geminiService';
 import { Loader2, Save, DollarSign, Clock, Zap, AlertTriangle, Tag, ChevronDown, Camera, User as UserIcon, Video, Bell, CreditCard, CheckCircle, Trash2 } from 'lucide-react';
 import { auth } from '../firebaseConfig';
 import { signOut } from 'firebase/auth';
@@ -39,6 +38,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
     const [price, setPrice] = useState(0);
     const [category, setCategory] = useState('');
     const [bio, setBio] = useState('');
+    const [taxRegime, setTaxRegime] = useState<'ordinario' | 'forfettario'>('forfettario');
     const [isAvailable, setIsAvailable] = useState(true);
     const [fastDeliveryEnabled, setFastDeliveryEnabled] = useState(false);
     const [fastDeliveryIncrease, setFastDeliveryIncrease] = useState(20);
@@ -110,6 +110,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                     const initialName = t.name || '';
                     const initialPrice = t.price || 0;
                     const initialBio = t.bio || '';
+                    const initialTaxRegime = t.tax_regime || 'forfettario';
                     const initialAvail = t.isAvailable !== false;
                     const initialFastEnabled = t.fastDeliveryEnabled || false;
                     const initialFastIncrease = t.fastDeliveryPriceIncrease || 20;
@@ -127,6 +128,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                     setDisplayName(initialName);
                     setPrice(initialPrice);
                     setBio(initialBio);
+                    setTaxRegime(initialTaxRegime);
                     setCategory(initialCategory);
                     setIsAvailable(initialAvail);
                     setFastDeliveryEnabled(initialFastEnabled);
@@ -139,6 +141,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                         displayName: initialName,
                         price: initialPrice,
                         bio: initialBio,
+                        taxRegime: initialTaxRegime,
                         category: initialCategory,
                         isAvailable: initialAvail,
                         fastDeliveryEnabled: initialFastEnabled,
@@ -196,6 +199,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
             price !== initialFormState.price ||
             category !== initialFormState.category ||
             bio !== initialFormState.bio ||
+            taxRegime !== initialFormState.taxRegime ||
             isAvailable !== initialFormState.isAvailable ||
             fastDeliveryEnabled !== initialFormState.fastDeliveryEnabled ||
             fastDeliveryIncrease !== initialFormState.fastDeliveryIncrease ||
@@ -207,7 +211,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
 
         setHasChanges(isChanged);
     }, [
-        displayName, price, category, bio, isAvailable, 
+        displayName, price, category, bio, taxRegime, isAvailable, 
         fastDeliveryEnabled, fastDeliveryIncrease, responseTime, 
         marketingMilestones, marketingEnabled, avatarFile, notificationPrefs, initialFormState
     ]);
@@ -243,22 +247,64 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
         }
 
         setUploadingIntro(true);
-        try {
-            const url = await uploadIntroVideo(file, user.id);
-            setIntroVideoUrl(url);
-            if (talent) {
-                setTalent({
-                    ...talent,
-                    introVideoUrl: url
-                });
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.src = URL.createObjectURL(file);
+        video.onloadedmetadata = async () => {
+            URL.revokeObjectURL(video.src);
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            if (w > 0 && h > 0) {
+                if (w > h) {
+                    toast.error("⚠️ FORMATO ORIZZONTALE RILEVATO: I video devono essere caricati esclusivamente in formato VERTICALE 9:16 (registrati tenendo lo smartphone in verticale).");
+                    setUploadingIntro(false);
+                    return;
+                }
+                const ratio = h / w;
+                if (ratio < 1.3) {
+                    toast.error("⚠️ ASPECT RATIO ERRATO: Il video caricato non ha un formato verticale valido (consigliato 9:16). Inquadra il soggetto tenendo lo smartphone in verticale.");
+                    setUploadingIntro(false);
+                    return;
+                }
             }
-            toast.success("Video di benvenuto caricato con successo!");
-        } catch (err) {
-            console.error("Errore upload video di invito:", err);
-            toast.error("Si è verificato un errore durante il caricamento del video.");
-        } finally {
-            setUploadingIntro(false);
-        }
+
+            // Procediamo con l'upload reale
+            try {
+                const url = await uploadIntroVideo(file, user.id);
+                setIntroVideoUrl(url);
+                if (talent) {
+                    setTalent({
+                        ...talent,
+                        introVideoUrl: url
+                    });
+                }
+                toast.success("Video di benvenuto caricato con successo!");
+            } catch (err) {
+                console.error("Errore upload video di invito:", err);
+                toast.error("Si è verificato un errore durante il caricamento del video.");
+            } finally {
+                setUploadingIntro(false);
+            }
+        };
+        video.onerror = async () => {
+            // Fallback se la lettura dei metadati fallisce
+            try {
+                const url = await uploadIntroVideo(file, user.id);
+                setIntroVideoUrl(url);
+                if (talent) {
+                    setTalent({
+                        ...talent,
+                        introVideoUrl: url
+                    });
+                }
+                toast.success("Video di benvenuto caricato con successo!");
+            } catch (err) {
+                console.error("Errore upload video di invito:", err);
+                toast.error("Si è verificato un errore durante il caricamento del video.");
+            } finally {
+                setUploadingIntro(false);
+            }
+        };
     };
 
     const [onboardingLoading, setOnboardingLoading] = useState(false);
@@ -294,24 +340,6 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 return;
             }
 
-            // 1. Moderazione Nome con Gemini
-            const nameCheck = await moderateText(displayName, 'name');
-            if (!nameCheck.safe) {
-                toast.error(`NOME NON VALIDO.\n\nIl nome scelto viola le linee guida:\n${nameCheck.reason}`);
-                setSaving(false);
-                return;
-            }
-
-            // 2. Moderazione Biografia con Gemini (Solo se TALENT e biografia presente)
-            if (user.role === 'TALENT' && bio.trim()) {
-                const bioCheck = await moderateText(bio, 'bio');
-                if (!bioCheck.safe) {
-                    toast.error(`BIOGRAFIA NON VALIDA.\n\nIl testo viola le linee guida:\n${bioCheck.reason}`);
-                    setSaving(false);
-                    return;
-                }
-            }
-
             // 3. Upload Avatar se cambiato
             let newAvatarUrl = talent?.avatarUrl;
             if (avatarFile) {
@@ -333,6 +361,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 updatePayload.price = Number(price);
                 updatePayload.category = category;
                 updatePayload.bio = bio;
+                updatePayload.tax_regime = taxRegime;
                 updatePayload.isAvailable = isAvailable;
                 updatePayload.fastDeliveryEnabled = fastDeliveryEnabled;
                 updatePayload.fastDeliveryPriceIncrease = Number(fastDeliveryIncrease);
@@ -349,6 +378,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                 price: Number(price),
                 category,
                 bio,
+                taxRegime,
                 isAvailable,
                 fastDeliveryEnabled,
                 fastDeliveryPriceIncrease: Number(fastDeliveryIncrease),
@@ -375,7 +405,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
     return (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             <h1 className="text-3xl font-bold text-slate-900 mb-2">Impostazioni Profilo</h1>
-            <p className="text-gray-500 mb-8">Gestisci la tua disponibilità, i prezzi e le opzioni di consegna.</p>
+            <p className="text-slate-700 font-extrabold mb-8">Gestisci la tua disponibilità, i prezzi e le opzioni di consegna.</p>
 
             <form onSubmit={handleSave} className="space-y-8">
                 
@@ -386,7 +416,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                             <CreditCard className="w-5 h-5 mr-3 text-indigo-600" />
                             Metodo di Pagamento (Stripe Connect)
                         </h2>
-                        <p className="text-xs text-slate-500 mb-6 uppercase font-bold tracking-wider">
+                        <p className="text-xs text-slate-700 mb-6 uppercase font-black tracking-wider">
                             Ricevi l'80% di ogni ordine direttamente sul tuo conto corrente bancario o carta di credito
                         </p>
 
@@ -395,7 +425,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                 <CheckCircle className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
                                 <div>
                                     <h4 className="text-sm font-black text-emerald-950 uppercase tracking-tight">Account Stripe Collegato</h4>
-                                    <p className="text-xs text-emerald-700 font-medium mt-1 leading-relaxed">
+                                    <p className="text-xs text-emerald-700 font-extrabold mt-1 leading-relaxed">
                                         Il tuo account Stripe Connect (<span className="font-mono bg-emerald-100/50 px-1.5 py-0.5 rounded text-[10px]">{talent.stripeAccountId}</span>) è attivo e configurato per ricevere rimesse dirette (Split 80/20).
                                     </p>
                                     <button
@@ -412,7 +442,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                             <div className="bg-indigo-50/20 border border-indigo-100/50 rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
                                 <div className="space-y-1">
                                     <h4 className="text-sm font-black text-indigo-950 uppercase tracking-tight">Onboarding non completato</h4>
-                                    <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-md">
+                                    <p className="text-xs text-slate-700 font-extrabold leading-relaxed max-w-md">
                                         Per poter ricevere pagamenti dai fan, devi completare la procedura guidata di Stripe Connect e attivare il tuo conto Express.
                                     </p>
                                 </div>
@@ -451,7 +481,7 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                 {avatarPreview ? (
                                     <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                    <div className="w-full h-full flex items-center justify-center text-gray-500">
                                         <UserIcon className="w-12 h-12" />
                                     </div>
                                 )}
@@ -467,36 +497,33 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                             />
                         </div>
                          <div className="flex-1 w-full space-y-4">
-                             <div>
-                                 <label className="block text-sm font-semibold text-slate-700 mb-2">Nome Visualizzato</label>
-                                 <input
-                                     type="text"
-                                     value={displayName}
-                                     onChange={(e) => setDisplayName(e.target.value)}
-                                     className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
-                                     placeholder="Es. Mago Merlino"
-                                     maxLength={30}
-                                 />
-                             </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">Nome Visualizzato</label>
+                                <input
+                                    type="text"
+                                    value={displayName}
+                                    onChange={(e) => setDisplayName(e.target.value)}
+                                    className="input-main"
+                                    placeholder="Es. Mago Merlino"
+                                    maxLength={30}
+                                />
+                            </div>
 
-                             {user.role === 'TALENT' && (
-                                 <div className="relative">
-                                     <label className="block text-sm font-semibold text-slate-700 mb-2">
-                                         Biografia
-                                     </label>
-                                     <textarea
-                                         rows={4}
-                                         value={bio}
-                                         onChange={(e) => setBio(e.target.value)}
-                                         className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
-                                         placeholder="Racconta chi sei ai tuoi fan..."
-                                     />
-                                     <p className="text-xs text-slate-500 mt-2">
-                                         La tua bio viene analizzata dall'AI per garantire il rispetto delle linee guida.
-                                     </p>
-                                 </div>
-                             )}
-                         </div>
+                            {user.role === 'TALENT' && (
+                                <div className="relative">
+                                    <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">
+                                        Biografia
+                                    </label>
+                                    <textarea
+                                        rows={4}
+                                        value={bio}
+                                        onChange={(e) => setBio(e.target.value)}
+                                        className="input-main min-h-[120px] resize-none"
+                                        placeholder="Racconta chi sei ai tuoi fan..."
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -506,8 +533,8 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                         <h2 className="text-lg font-bold text-slate-900 mb-2 flex items-center">
                             <Video className="w-5 h-5 mr-2 text-indigo-500" /> Video di Invito / Benvenuto (Opzionale)
                         </h2>
-                        <p className="text-xs text-gray-500 mb-6">
-                            Carica un breve video messaggio pubblico (max 50MB, .mp4, .webm, .mov) per invitare e incoraggiare i fan a farti richieste! Comparirà sulla bacheca e sulla pagina pubblica del tuo profilo.
+                        <p className="text-xs text-slate-700 font-extrabold mb-6">
+                            Carica un breve video messaggio pubblico (max 50MB, **formato verticale 9:16 richiesto**, es. .mp4, .webm, .mov) per invitare e incoraggiare i fan a farti richieste! Comparirà sulla bacheca e sulla pagina pubblica del tuo profilo. *Nota: registra il video tenendo lo smartphone in piedi.*
                         </p>
 
                         <div className="space-y-4">
@@ -521,9 +548,9 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                 </div>
                             ) : (
                                 <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center bg-gray-50">
-                                    <Video className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                                    <p className="text-sm font-semibold text-slate-600">Nessun video di invito caricato</p>
-                                    <p className="text-xs text-slate-400 mt-1">I fan vedranno solo i dettagli testuali e l'avatar.</p>
+                                    <Video className="w-10 h-10 text-gray-500 mx-auto mb-2" />
+                                    <p className="text-sm font-semibold text-slate-700">Nessun video di invito caricato</p>
+                                    <p className="text-xs text-slate-700 font-extrabold mt-1">I fan vedranno solo i dettagli testuali e l'avatar.</p>
                                 </div>
                             )}
 
@@ -597,21 +624,21 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Categoria</label>
-                                <div className="relative">
-                                    <Tag className="absolute top-3 left-3 w-4 h-4 text-gray-400 z-10" />
-                                    <ChevronDown className="absolute top-3.5 right-3 w-4 h-4 text-gray-400 z-10 pointer-events-none" />
+                                <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">Categoria</label>
+                                <div className="relative flex items-center">
+                                    <Tag className="absolute left-4 w-4 h-4 text-slate-400 z-10 pointer-events-none" />
+                                    <ChevronDown className="absolute right-4 w-4 h-4 text-slate-400 z-10 pointer-events-none" />
                                     <select 
                                         value={category}
                                         onChange={(e) => setCategory(e.target.value)}
-                                        className="block w-full pl-10 pr-10 rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border bg-white appearance-none relative cursor-pointer hover:border-gray-400 transition-colors"
+                                        className="input-main pl-11 pr-10 appearance-none relative cursor-pointer"
                                         disabled={categories.length === 0}
                                     >
                                         {categories.length === 0 ? (
                                             <option>Caricamento categorie...</option>
                                         ) : (
                                             categories.map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
+                                                <option key={cat} value={cat} className="bg-[#1E1E1E] text-[#F5F5F5]">{cat}</option>
                                             ))
                                         )}
                                     </select>
@@ -619,18 +646,33 @@ const TalentSettings: React.FC<TalentSettingsProps> = ({ user }) => {
                                 <p className="text-xs text-gray-400 mt-1">Seleziona una categoria dal database.</p>
                             </div>
                             <div>
-                                 {/* Empty Spacer */}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Prezzo per video (€)</label>
+                                <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">Prezzo per video (€)</label>
                                 <input 
                                     type="number" 
                                     min="1"
                                     value={price}
                                     onChange={(e) => setPrice(Number(e.target.value))}
-                                    className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 sm:text-sm p-3 border"
+                                    className="input-main"
                                 />
+                                <p className="text-xs text-slate-400 mt-1">Imposta il tuo prezzo base pre-tasse.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2 ml-1">Regime Fiscale</label>
+                                <select 
+                                    value={taxRegime}
+                                    onChange={(e) => setTaxRegime(e.target.value as 'ordinario' | 'forfettario')}
+                                    className="input-main relative cursor-pointer"
+                                    id="tax_regime_select"
+                                >
+                                    <option value="forfettario" className="bg-[#1E1E1E] text-[#F5F5F5]">Regime Forfettario (No IVA)</option>
+                                    <option value="ordinario" className="bg-[#1E1E1E] text-[#F5F5F5]">Regime Ordinario (Aggiunge IVA 22%)</option>
+                                </select>
+                                <p className="text-xs text-slate-400 mt-1">
+                                    {taxRegime === 'ordinario' 
+                                        ? "I fan pagheranno l'IVA al 22% in più. La nostra commissione di piattaforma includerà l'IVA." 
+                                        : "I fan pagheranno il prezzo base. La nostra commissione di piattaforma includerà l'IVA."}
+                                </p>
                             </div>
                         </div>
                     </div>

@@ -9,25 +9,56 @@ const db = admin.firestore();
 
 // Lazy initialization of Stripe with dynamic database configuration fallback
 let stripeClient: Stripe | null = null;
+let currentStripeKey: string | null = null;
+
 const getStripeAsync = async (): Promise<Stripe> => {
-    if (!stripeClient) {
-        let key = process.env.STRIPE_SECRET_KEY;
-        if (!key) {
-            try {
+    let key = process.env.STRIPE_SECRET_KEY;
+    
+    try {
+        // Try the new secure _platform_secrets collection first
+        const platformSnap = await db.collection('_platform_secrets').doc('stripe_config').get();
+        if (platformSnap.exists) {
+            const pc = platformSnap.data();
+            const mode = pc?.mode || 'test';
+            if (mode === 'test') {
+                key = pc?.testSecretKey;
+            } else {
+                key = pc?.liveSecretKey;
+            }
+        }
+    } catch (err) {
+        console.warn("Could not retrieve Stripe dynamic config from _platform_secrets:", err);
+    }
+
+    if (!key) {
+        try {
+            // First try the secrets collection
+            const secretsSnap = await db.collection('secrets').doc('stripe').get();
+            if (secretsSnap.exists) {
+                key = secretsSnap.data()?.stripeSecretKey;
+            }
+            
+            // Fallback to legacy settings/global_config
+            if (!key) {
                 const configSnap = await db.collection('settings').doc('global_config').get();
                 if (configSnap.exists) {
                     key = configSnap.data()?.stripeSecretKey;
                 }
-            } catch (err) {
-                console.warn("Could not retrieve stripeSecretKey from Firestore settings/global_config doc:", err);
             }
+        } catch (err) {
+            console.warn("Could not retrieve legacy stripeSecretKey from Firestore index:", err);
         }
-        if (!key) {
-            throw new Error('STRIPE_SECRET_KEY environment variable is missing and not configured in global settings.');
-        }
+    }
+
+    if (!key) {
+        throw new Error('STRIPE_SECRET_KEY environment variable is missing and not configured in global settings.');
+    }
+
+    if (!stripeClient || currentStripeKey !== key) {
         stripeClient = new Stripe(key, {
             apiVersion: '2023-10-16' as any,
         });
+        currentStripeKey = key;
     }
     return stripeClient;
 };
@@ -72,30 +103,87 @@ export const createPaymentIntent = functions.https.onCall(async (data, context) 
             throw new functions.https.HttpsError('permission-denied', 'Only the requesting fan can pay for this order.');
         }
 
-        // Estrai l'importo direttamente dall'ordine memorizzato su Firestore per prevenire manomissioni lato client
-        const safeAmount = orderData?.pricePaid;
-        if (typeof safeAmount !== 'number' || safeAmount <= 0) {
-            throw new functions.https.HttpsError('failed-precondition', 'Invalid or missing pricePaid in the Firestore order.');
+        const talentId = orderData.talentId;
+        if (!talentId) {
+            throw new functions.https.HttpsError('failed-precondition', 'Missing talentId in the Firestore order.');
+        }
+
+        const talentSnap = await db.collection('users').doc(talentId).get();
+        if (!talentSnap.exists) {
+            throw new functions.https.HttpsError('not-found', 'Talent user document not found.');
+        }
+
+        const talentData = talentSnap.data();
+        const taxRegime = talentData?.tax_regime || 'forfettario';
+
+        // Retrieve the platform fee setting (or custom fee rate)
+        let commissionPercent = 20;
+        try {
+            const configSnap = await db.collection('settings').doc('global_config').get();
+            if (configSnap.exists) {
+                const configData = configSnap.data();
+                if (configData?.platformFeePercent !== undefined) {
+                    commissionPercent = configData.platformFeePercent;
+                }
+            }
+        } catch (settingsError) {
+            console.warn("Could not retrieve global_config platformFeePercent:", settingsError);
+        }
+
+        if (talentData?.customCommissionPercent !== undefined && talentData?.customCommissionPercent !== null) {
+            commissionPercent = talentData.customCommissionPercent;
+        }
+
+        // Estrai l'importo base direttamente dall'ordine memorizzato su Firestore per prevenire manomissioni lato client
+        const basePrice = orderData?.basePrice || orderData?.pricePaid || talentData?.price || 0;
+        if (typeof basePrice !== 'number' || basePrice <= 0) {
+            throw new functions.https.HttpsError('failed-precondition', 'Invalid or missing price in the Firestore order.');
+        }
+
+        let finalPricePaid = basePrice;
+        let finalApplicationFee = 0;
+
+        const baseFee = (basePrice * commissionPercent) / 100;
+        if (taxRegime === 'ordinario') {
+            // Caso A (Ordinario): Fan pays base price + 22% VAT. CiaoStar keeps platform fee + 22% VAT.
+            finalPricePaid = Number((basePrice * 1.22).toFixed(2));
+            finalApplicationFee = Number((baseFee * 1.22).toFixed(2));
+        } else {
+            // Caso B (Forfettario): Fan pays base price. CiaoStar keeps platform fee + 22% VAT.
+            finalPricePaid = Number(basePrice.toFixed(2));
+            finalApplicationFee = Number((baseFee * 1.22).toFixed(2));
         }
 
         // Create the PaymentIntent on Stripe
         // Using "transfer_group" to enable separate late transfers
         const paymentIntent = await stripe.paymentIntents.create({
-            amount: Math.round(safeAmount * 100), // in cents
+            amount: Math.round(finalPricePaid * 100), // in cents
             currency: 'eur',
-            payment_method_types: ['card'],
+            capture_method: 'manual', // Set capture_method to manual for Auth & Capture
+            automatic_payment_methods: {
+                enabled: true
+            },
             transfer_group: orderId,
             metadata: {
                 orderId: orderId,
                 fanId: context.auth.uid,
-                talentId: orderData?.talentId || ''
+                talentId: talentId,
+                taxRegime: taxRegime,
+                basePrice: String(basePrice),
+                finalPricePaid: String(finalPricePaid),
+                finalApplicationFee: String(finalApplicationFee)
             }
         });
 
-        // Save Stripe PaymentIntent ID to the Firestore order
+        // Save Stripe PaymentIntent ID and resolved pricing values to the Firestore order
         await db.collection('orders').doc(orderId).update({
             stripePaymentIntentId: paymentIntent.id,
             status: 'PENDING_PAYMENT',
+            pricePaid: finalPricePaid,
+            applicationFee: finalApplicationFee,
+            taxRegime: taxRegime,
+            tax_regime: taxRegime,
+            basePrice: basePrice,
             updatedAt: new Date().toISOString()
         });
 
@@ -126,13 +214,42 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
     let event: Stripe.Event;
 
     try {
+        // Try the new secure _platform_secrets collection first
+        const platformSnap = await db.collection('_platform_secrets').doc('stripe_config').get();
+        if (platformSnap.exists) {
+            const pc = platformSnap.data();
+            const mode = pc?.mode || 'test';
+            if (mode === 'test') {
+                stripeKey = pc?.testSecretKey;
+                endpointSecret = pc?.testWebhookSecret;
+            } else {
+                stripeKey = pc?.liveSecretKey;
+                endpointSecret = pc?.liveWebhookSecret;
+            }
+        }
+    } catch (err) {
+        console.warn("Could not retrieve Stripe dynamic config for webhook from _platform_secrets:", err);
+    }
+
+    try {
         if (!stripeKey || !endpointSecret) {
             try {
-                const configSnap = await db.collection('settings').doc('global_config').get();
-                if (configSnap.exists) {
-                    const data = configSnap.data();
+                // First try direct secrets collection
+                const secretsSnap = await db.collection('secrets').doc('stripe').get();
+                if (secretsSnap.exists) {
+                    const data = secretsSnap.data();
                     if (!stripeKey) stripeKey = data?.stripeSecretKey;
                     if (!endpointSecret) endpointSecret = data?.stripeWebhookSecret;
+                }
+                
+                // Fallback to legacy settings/global_config
+                if (!stripeKey || !endpointSecret) {
+                    const configSnap = await db.collection('settings').doc('global_config').get();
+                    if (configSnap.exists) {
+                        const data = configSnap.data();
+                        if (!stripeKey) stripeKey = data?.stripeSecretKey;
+                        if (!endpointSecret) endpointSecret = data?.stripeWebhookSecret;
+                    }
                 }
             } catch (dbErr) {
                 console.warn("Could not retrieve Stripe config dynamically for webhook:", dbErr);
@@ -157,10 +274,11 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
         return;
     }
 
-    // Handle PaymentIntent succeeded event
-    if (event.type === 'payment_intent.succeeded') {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        const orderId = paymentIntent.metadata?.orderId;
+    // Handle PaymentIntent succeeded, Checkout Session completed, and pre-authorizations (requires capture) events
+    if (event.type === 'payment_intent.succeeded' || event.type === 'checkout.session.completed' || event.type === 'payment_intent.amount_capturable_updated') {
+        const stripeObject = event.data.object as any;
+        const orderId = stripeObject.metadata?.orderId;
+        const paymentId = stripeObject.id;
 
         if (orderId) {
             try {
@@ -172,7 +290,7 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
                     const currentStatus = orderData?.status;
                     
                     // Controllo Idempotenza / Transazioni Duplicate
-                    if (currentStatus === 'PAID_AWAITING_VIDEO' || currentStatus === 'COMPLETED' || currentStatus === 'DISPUTE_OPEN' || currentStatus === 'EXPIRED_REFUNDED') {
+                    if (currentStatus === 'PAID_AWAITING_VIDEO' || currentStatus === 'ACCEPTED' || currentStatus === 'COMPLETED' || currentStatus === 'DISPUTE_OPEN' || currentStatus === 'EXPIRED_REFUNDED') {
                         console.log(`Order ${orderId} already processed (status: ${currentStatus}). Returning 200 early to guarantee idempotence.`);
                         res.status(200).json({ received: true });
                         return;
@@ -183,7 +301,7 @@ export const stripeWebhook = functions.https.onRequest(async (req, res) => {
                     history.push({
                         action: "Pagamento registrato con successo",
                         timestamp: new Date().toISOString(),
-                        note: `PaymentIntent ID: ${paymentIntent.id}`
+                        note: `Event: ${event.type}, ID: ${paymentId}`
                     });
 
                     // Update order status to PAID_AWAITING_VIDEO
@@ -357,6 +475,23 @@ export const completeOrderAndSplit = functions.firestore
             });
 
             const talentId = newValue.talentId;
+
+            // Create in-app notification for the Talent (now sent ONLY on actual payment confirmation)
+            try {
+                await db.collection('notifications').add({
+                    recipientId: talentId,
+                    title: "Nuova richiesta ricevuta!",
+                    message: `Hai ricevuto una nuova richiesta da parte di ${newValue.fanName || 'un fan'} per ${newValue.recipientName || 'un destinatario'}!`,
+                    orderId: orderId,
+                    createdAt: new Date().toISOString(),
+                    read: false,
+                    type: 'orderCreated'
+                });
+                console.log(`[Notification] In-app notification created successfully for talent ${talentId} for paid order ${orderId}`);
+            } catch (notifErr) {
+                console.error(`Error creating in-app notification for talent ${talentId}:`, notifErr);
+            }
+
             try {
                 const talentSnap = await db.collection('users').doc(talentId).get();
                 if (talentSnap.exists) {
@@ -441,6 +576,24 @@ export const completeOrderAndSplit = functions.firestore
                         const payoutAmount = pricePaid - appFee;
                         if (payoutAmount > 0) {
                             const stripe = await getStripeAsync();
+                            
+                            // Capture the pre-authorized PaymentIntent first
+                            const piId = newValue.stripePaymentIntentId;
+                            if (piId) {
+                                try {
+                                    const pi = await stripe.paymentIntents.retrieve(piId);
+                                    if (pi.status === 'requires_capture') {
+                                        console.log(`[Stripe Capture] Capturing authorized PaymentIntent ${piId}...`);
+                                        await stripe.paymentIntents.capture(piId);
+                                        console.log(`[Stripe Capture] PaymentIntent ${piId} successfully captured!`);
+                                    } else {
+                                        console.log(`[Stripe Capture] PaymentIntent ${piId} status is ${pi.status}, capture skipped.`);
+                                    }
+                                } catch (captureErr: any) {
+                                    console.error(`[Stripe Capture Error] Failed to capture payment intent ${piId}:`, captureErr);
+                                }
+                            }
+
                             const transfer = await stripe.transfers.create({
                                 amount: Math.round(payoutAmount * 100), // Stripe expects cents
                                 currency: 'eur',
@@ -540,6 +693,33 @@ export const completeOrderAndSplit = functions.firestore
                 }
             } catch (err) {
                 console.error(`Error sending email notification to fan ${fanId}:`, err);
+            }
+        }
+
+        // C. Trigger when status changes to REJECTED, CANCELED, CANCELED_BY_FAN or EXPIRED_REFUNDED (Void/Release pre-authorized funds or issue refund)
+        if (
+            (newValue.status === 'REJECTED' || newValue.status === 'CANCELED' || newValue.status === 'CANCELED_BY_FAN' || newValue.status === 'EXPIRED_REFUNDED') &&
+            (oldValue.status !== newValue.status)
+        ) {
+            const piId = newValue.stripePaymentIntentId;
+            if (piId) {
+                try {
+                    const stripe = await getStripeAsync();
+                    const pi = await stripe.paymentIntents.retrieve(piId);
+                    if (pi.status === 'requires_capture') {
+                        console.log(`[Stripe Void] Cancelling/Voiding authorized PaymentIntent ${piId} (Order status: ${newValue.status})...`);
+                        await stripe.paymentIntents.cancel(piId);
+                        console.log(`[Stripe Void] PaymentIntent ${piId} successfully voided.`);
+                    } else if (pi.status === 'succeeded') {
+                        console.log(`[Stripe Refund] PaymentIntent ${piId} has already been captured. Issuing standard refund (Order status: ${newValue.status})...`);
+                        await stripe.refunds.create({
+                            payment_intent: piId,
+                        });
+                        console.log(`[Stripe Refund] PaymentIntent ${piId} successfully refunded.`);
+                    }
+                } catch (cancelErr: any) {
+                    console.error(`[Stripe Void/Refund Error] Failed to process cancel/refund for PaymentIntent ${piId}:`, cancelErr);
+                }
             }
         }
     });

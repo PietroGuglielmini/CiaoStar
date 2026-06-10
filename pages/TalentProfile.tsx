@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent, callCreatePaymentIntent, subscribeToOrderChanges, incrementProfileViews } from '../services/dataService';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { getTalentById, createRequest, getAdminSettings, getReviewsForTalent, getPublicSamplesForTalent, callCreatePaymentIntent, subscribeToOrderChanges, incrementProfileViews, getRequestById } from '../services/dataService';
 import { applyTalentSEO } from '../services/seoService';
 import { Skeleton } from '../components/Skeleton';
 import { Talent, User, AdminSettings, UserRole, Review } from '../types';
@@ -14,6 +14,8 @@ import confetti from 'canvas-confetti';
 const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const orderIdParam = searchParams.get('orderId');
   
   const [talent, setTalent] = useState<Talent | undefined>();
   const [settings, setSettings] = useState<AdminSettings | null>(null);
@@ -126,6 +128,43 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
     }
   }, [talent, settings]);
 
+  // Recover order from URL orderIdParam (abandoned cart payment link)
+  useEffect(() => {
+    const checkResumeOrder = async () => {
+      if (orderIdParam && currentUser && talent && !loading) {
+        try {
+          const order = await getRequestById(orderIdParam);
+          if (order && order.fanId === currentUser.id && order.status === 'PENDING_PAYMENT') {
+            setRecipient(order.recipientName || '');
+            setInstructions(order.instructions || '');
+            setOccasion(order.occasion || OCCASIONS[0]);
+            setAllowPublicSample(order.allowPublicSample !== false);
+            setCreatedOrderId(order.id);
+            setAgreed(true);
+            setWithdrawalWaived(true);
+            setPaymentStep('processing');
+            setShowPaymentModal(true);
+            setPaymentError(null);
+
+            try {
+                const stripeRes = await callCreatePaymentIntent(order.id, order.pricePaid);
+                setClientSecret(stripeRes.clientSecret);
+                setPaymentIntentId(stripeRes.paymentIntentId);
+                setPaymentStep('idle');
+            } catch (stripeErr: any) {
+                console.error("Errore nell'inizializzazione del PaymentIntent Stripe:", stripeErr);
+                setPaymentError("Stripe non è configurato correttamente o la sessione è scaduta: " + (stripeErr?.message || "Impossibile generare del client secret per il checkout. Riprova."));
+                setPaymentStep('idle');
+            }
+          }
+        } catch (err) {
+          console.error("Errore nel recupero dell'ordine per checkout:", err);
+        }
+      }
+    };
+    checkResumeOrder();
+  }, [orderIdParam, currentUser, talent, loading]);
+
   const restoreDraft = () => {
     if (draftData) {
       setRecipient(draftData.recipient || '');
@@ -177,9 +216,8 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
             setPaymentIntentId(stripeRes.paymentIntentId);
             setPaymentStep('idle');
         } catch (stripeErr: any) {
-            console.warn("Cloud function not active/deployed yet. Using simulated client payment secret...", stripeErr);
-            setClientSecret("pi_mock_sec_key_client_mode_ciaostar_connect_v1");
-            setPaymentIntentId("pi_mock_intent_connect_101");
+            console.error("Errore nell'inizializzazione del PaymentIntent Stripe:", stripeErr);
+            setPaymentError("Errore nell'inizializzazione del pagamento Stripe: " + (stripeErr?.message || "Impossibile generare del client secret per il checkout. Riprova."));
             setPaymentStep('idle');
         }
     } catch (err: any) {
@@ -650,7 +688,7 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                           <div className="space-y-6">
                               <div className="bg-gray-50/50 p-6 rounded-2xl border border-gray-100 space-y-4">
                                   <div className="flex justify-between items-center">
-                                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Video per</span>
+                                      <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">Video per</span>
                                       <span className="text-xs font-bold text-slate-900">{recipient}</span>
                                   </div>
                                   <div className="flex justify-between items-center pt-3 border-t border-gray-200">
@@ -659,17 +697,17 @@ const TalentProfile: React.FC<{ currentUser: User | null }> = ({ currentUser }) 
                                   </div>
 
                                   {/* Separate Charges and Transfers Split UI */}
-                                  <div className="pt-3 border-t border-gray-200/60 text-[10px] space-y-1.5 text-slate-400">
-                                      <div className="font-black text-slate-500 uppercase tracking-wider mb-2">Split "Separate Charges & Transfers":</div>
+                                  <div className="pt-3 border-t border-gray-200/60 text-[10px] space-y-1.5 text-slate-600">
+                                      <div className="font-black text-slate-800 uppercase tracking-wider mb-2">Split "Separate Charges & Transfers":</div>
                                       <div className="flex justify-between">
-                                          <span>Quota Talent (80%):</span>
-                                          <span className="font-bold text-slate-600">€{(talent.price * 0.8).toFixed(2)}</span>
+                                          <span className="font-bold text-slate-700">Quota Talent (80%):</span>
+                                          <span className="font-black text-slate-900">€{(talent.price * 0.8).toFixed(2)}</span>
                                       </div>
                                       <div className="flex justify-between">
-                                          <span>Fee Piattaforma (20%):</span>
-                                          <span className="font-bold text-slate-600">€{(talent.price * 0.2).toFixed(2)}</span>
+                                          <span className="font-bold text-slate-700">Fee Piattaforma (20%):</span>
+                                          <span className="font-black text-slate-900">€{(talent.price * 0.2).toFixed(2)}</span>
                                       </div>
-                                      <p className="text-[9px] pt-1.5 leading-normal text-slate-400 font-medium italic border-t border-dashed border-gray-200">
+                                      <p className="text-[9px] pt-1.5 leading-normal text-slate-600 font-medium italic border-t border-dashed border-gray-200">
                                           Nota: L'importo totale viene congelato sulla piattaforma. Al caricamento del video su Storage, la Cloud Function avvia lo split immediato.
                                       </p>
                                   </div>

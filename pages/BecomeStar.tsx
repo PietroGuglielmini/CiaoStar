@@ -292,34 +292,34 @@ const BecomeStar: React.FC = () => {
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-slate-900 text-white rounded-[2.5rem] p-8 border border-slate-950 shadow-xl space-y-6 text-left">
               <h3 className="text-sm font-black uppercase tracking-wider text-indigo-400">Guida alla Trasparenza Fiscale</h3>
-              <p className="text-xs text-slate-300 font-medium leading-relaxed">
+              <p className="text-xs text-slate-200 font-medium leading-relaxed">
                 CiaoStar opera nella massima conformità delle leggi tributarie e civili della Repubblica Italiana. Ecco come funziona l'aspetto fiscale della tua attività artistica sulla nostra piattaforma:
               </p>
 
               <div className="space-y-4 pt-2 border-t border-white/10 text-xs">
                 <div>
                   <h4 className="font-bold text-white text-xs mb-1">Come avvengono gli accrediti?</h4>
-                  <p className="text-slate-400 leading-normal">
+                  <p className="text-slate-300 leading-normal font-medium">
                     L'utente effettua il pagamento a CiaoStar. Su ciascun pagamento, la piattaforma trattiene il 20%. L'80% rimanente viene accreditato automaticamente sul tuo conto tramite il sistema protetto Stripe Connect non appena consegni il videomessaggio approvato dal fan.
                   </p>
                 </div>
 
                 <div>
                   <h4 className="font-bold text-white text-xs mb-1">Cessione del Diritto d'Autore (Privati)</h4>
-                  <p className="text-slate-400 leading-normal">
+                  <p className="text-slate-300 leading-normal font-medium">
                     Se non possiedi una Partita IVA, le tue creazioni di videomessaggi ricadono fiscalmente nella cessione dei diritti d'autore (art. 53, comma 2, lett. b del TUIR). Questo inquadramento è esente da IVA e prevede una deduzione forfettaria delle spese del 25% (o del 40% se hai meno di 35 anni).
                   </p>
                 </div>
 
                 <div>
                   <h4 className="font-bold text-white text-xs mb-1">Emissione Fattura (Professionsiti/P.IVA)</h4>
-                  <p className="text-slate-400 leading-normal">
+                  <p className="text-slate-300 leading-normal font-medium">
                     Se eserciti l'attività professionale con Partita IVA, sarai tenuto ad emettere fattura elettronica trimestralmente o mensilmente per le commissioni spettanti ed i compensi liquidati su Stripe Connect.
                   </p>
                 </div>
               </div>
 
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 text-[11px] text-slate-400 leading-relaxed font-semibold">
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 text-[11px] text-slate-300 leading-relaxed font-semibold">
                 * Nota Legale: CiaoStar non si sostituisce al tuo consulente fiscale o commercialista. Ogni talento è responsabile dell'inserimento dei propri redditi nella dichiarazione dei redditi annuale (Modello 730 o Persone Fisiche).
               </div>
             </div>

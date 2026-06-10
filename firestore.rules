@@ -223,5 +223,15 @@ service cloud.firestore {
     match /system_settings/{settingsId} {
       allow read, write: if isAdmin();
     }
+
+    // Stripe Secret Keys, API credentials - STRICTLY ADMIN-ONLY!
+    match /secrets/{secretId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Platform secrets (Stripe dynamic config) - STRICTLY ADMIN-ONLY!
+    match /_platform_secrets/{secretId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

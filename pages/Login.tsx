@@ -87,7 +87,7 @@ const Login: React.FC = () => {
                     <Star className="w-8 h-8 text-white fill-current" />
                 </div>
                 <h2 className="text-3xl font-extrabold text-slate-900 mb-2">Bentornato su CiaoStar</h2>
-                <p className="text-slate-500 font-medium text-sm">Entra nel mondo dei video messaggi personalizzati.</p>
+                <p className="text-slate-700 font-extrabold text-sm">Entra nel mondo dei video messaggi personalizzati.</p>
             </div>
 
             <div className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-sm border border-gray-100 space-y-6">
@@ -96,14 +96,14 @@ const Login: React.FC = () => {
                   <button 
                     type="button"
                     onClick={() => { setIsRegistering(false); setErrorMsg(null); }}
-                    className={`py-2 px-4 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${!isRegistering ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`py-2 px-4 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${!isRegistering ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                   >
                     Accedi
                   </button>
                   <button 
                     type="button"
                     onClick={() => { setIsRegistering(true); setErrorMsg(null); }}
-                    className={`py-2 px-4 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${isRegistering ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`py-2 px-4 rounded-xl text-xs font-black uppercase tracking-wide transition-all ${isRegistering ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                   >
                     Registrati
                   </button>
@@ -112,14 +112,14 @@ const Login: React.FC = () => {
                 {/* Email / Password Form */}
                 <form onSubmit={handleEmailAuth} className="space-y-4 text-left">
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Indirizzo Email</label>
+                    <label className="block text-[10px] font-black text-slate-700 uppercase tracking-widest">Indirizzo Email</label>
                     <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                       <input 
                         type="email" 
                         required
                         placeholder="nome@esempio.it"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-400 text-slate-800"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-500 text-slate-800"
                         value={email}
                         onChange={e => setEmail(e.target.value)}
                       />
@@ -127,14 +127,14 @@ const Login: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest">Password</label>
+                    <label className="block text-[10px] font-black text-slate-700 uppercase tracking-widest">Password</label>
                     <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                       <input 
                         type="password" 
                         required
                         placeholder="••••••••"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-400 text-slate-800"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3.5 pl-11 pr-4 text-xs font-bold focus:outline-none focus:border-indigo-500 transition-colors placeholder-slate-500 text-slate-800"
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                       />
@@ -150,8 +150,8 @@ const Login: React.FC = () => {
                               onChange={(e) => setTermsAccepted(e.target.checked)}
                               className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
-                          <span className="text-xs text-slate-600 font-semibold leading-relaxed">
-                              Accetto i <strong className="text-slate-800 font-bold">Termini e Condizioni</strong> e dichiaro di aver visionato l’<strong className="text-slate-800 font-bold">Informativa Privacy</strong> della piattaforma CiaoStar.
+                          <span className="text-xs text-slate-700 font-extrabold leading-relaxed">
+                              Accetto i <strong className="text-slate-900 font-extrabold">Termini e Condizioni</strong> e dichiaro di aver visionato l’<strong className="text-slate-900 font-extrabold">Informativa Privacy</strong> della piattaforma CiaoStar.
                           </span>
                       </label>
 
@@ -162,8 +162,8 @@ const Login: React.FC = () => {
                               onChange={(e) => setGdprAccepted(e.target.checked)}
                               className="mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
-                          <span className="text-xs text-slate-600 font-semibold leading-relaxed">
-                              Consento al <strong className="text-slate-800 font-bold">trattamento dei miei dati personali</strong> (incluso email e foto profilo fornite dai social) in conformità con il Regolamento Europeo n. 2016/679 (<strong className="text-slate-800 font-bold">GDPR</strong>).
+                          <span className="text-xs text-slate-700 font-extrabold leading-relaxed">
+                              Consento al <strong className="text-slate-900 font-extrabold">trattamento dei miei dati personali</strong> (incluso email e foto profilo fornite dai social) in conformità con il Regolamento Europeo n. 2016/679 (<strong className="text-slate-900 font-extrabold">GDPR</strong>).
                           </span>
                       </label>
                   </div>
